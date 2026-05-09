@@ -29,6 +29,9 @@ src/
   hardware/melagabra.littlefoot   Hardware program for the Lightpad Block
   hardware/roli-tests.mjs    Pure-Node unit tests for sysex.js + RoliBlock state machine
   exports/scl-midi-json.js   Scala (.scl), Type-1 SMF (.mid), JSON exporters
+  guitar.html                Standalone fretboard visualizer — dark theme, 24-fret,
+                             customizable tuning, scale chooser (72 Melakartas + known scales),
+                             harmonic-function colored orbs, 3-row nibble bit display
 ```
 
 ## Running
@@ -151,6 +154,23 @@ Plate ∞ — The Console    Perform mode; instrument picker (Yantra / Fretboard
 Light-default vellum (#F4ECD8), iron-gall ink (#1B1A17), vermillion accent (#8B2E1F) reserved for vivadi pulses, K₂ antipodal cues, and the Z-triangle.  Indigo (#3A5A6C) for cold pole / R-G regions.  Brass (#C8A24A) for Sa/Pa anchors and rare ornament.  Newsreader display, Spectral body, Tiro Devanagari Sanskrit for kaṭapayādi mnemonics, JetBrains Mono for hex / numerals.
 
 Motion is slow (`cubic-bezier(0.2, 0, 0, 1)`, 600–900 ms transitions in Explore).  Perform mode flips the surface to ink with vellum text and is sub-60 ms input-to-audio.  The site is single-page with hash-routed plates; the Plate index is a thin right gutter that fades in 4 s after the lobby's hero animation.  Reduced-motion preference cuts every animation to 1 ms.
+
+## Guitar Fretboard (`guitar.html`)
+
+A standalone dark-theme fretboard visualizer linked from the main app's plate index ("Gtr"). It shares the 12-bit encoding and harmonic-function color logic with the main app but uses an independent dark UI optimized for focused practice.
+
+### Key features
+- **Customizable tuning** — 20+ presets (Standard, Drop D, Open G, NST/Fripp, etc.) + custom per-string tuning, persisted to `localStorage`
+- **Scale chooser** — modal with two tabs: 72 Melakartas (12 chakra grid) and Known Scales (grouped by Forte class)
+- **Harmonic-function orbs** — 4 chromatically-connected color families on the fretboard: Structural (brass), Chord Quality (vermillion), Extensions (teal), Altered (mauve/plum)
+- **3-row nibble bit display** — Scale Intelligence panel shows hex digits + bits organized by nibble, colored by interval function
+- **24-fret symmetrical fretboard** — Major 3rds tuning default (F-A-C#-F-A-C#)
+
+### Aesthetic divergence
+The fretboard uses a self-contained dark theme (`#0f172a` slate background, `#2c1a11` wood texture) rather than the Palmleaf Observatory palette. This is intentional: the fretboard is a practice tool, not part of the manuscript reading experience. The harmonic-function color families (brass, vermillion, teal, mauve) are shared with the main app but rendered as glossy radial-gradient orbs against dark wood instead of flat glyphs against vellum.
+
+### Encoding consistency
+`guitar.html` uses the same mirrored-endianness convention as the main app and the paper. The `intervalsToHex()` helper converts a 7-note interval array to a 3-digit hex string using `1 << (11 - iv)` per active interval — identical to the paper's §2.3 convention. The 3-row nibble display (bits 11‑8 / 7‑4 / 3‑0) directly visualizes the hex nibbles as coherent musical chunks: top nibble = lower tetrachord, middle = madhyama + G3 + Pa, bottom = upper tetrachord.
 
 ## ROLI Lightpad Block (Performance instrument №5)
 
