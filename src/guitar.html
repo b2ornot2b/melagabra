@@ -3,686 +3,554 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>12-Bit Vector Fretboard Visualizer</title>
+    <title>Symmetrical M3 Fretboard Visualizer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0f172a; /* Slate 900 */
-            color: #f8fafc;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
 
-        /* Fretboard Wood Texture */
-        .fretboard-wood {
-            background: linear-gradient(to right, #2c1e16, #3d2817);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
-            border-top: 2px solid #5a3d24;
-            border-bottom: 2px solid #1a110c;
+        .fretboard-container {
+            overflow-x: auto;
+            padding: 1rem 0;
         }
 
-        /* The Grid layout for strings and frets */
-        .fret-grid {
-            display: grid;
-            /* 1 open string fret + 24 regular frets */
-            grid-template-columns: 50px repeat(24, 60px);
-            grid-template-rows: repeat(6, 40px);
-            position: relative;
-        }
-
-        /* Nut styling (Fret 0 divider) */
-        .nut-divider {
-            border-right: 6px solid #e2e8f0; /* Silver nut */
-            background: #1a110c; /* Darker behind open strings */
-        }
-
-        /* Fret Wires */
-        .fret-cell {
-            position: relative;
-            border-right: 2px solid #94a3b8; /* Silver fret wire */
+        .fretboard {
             display: flex;
-            align-items: center;
-            justify-content: center;
+            flex-direction: column;
+            min-width: 1200px;
+            background: linear-gradient(to right, #2c1a11, #1a0f0a);
+            border-radius: 4px;
+            border: 2px solid #3d2616;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            padding-left: 20px;
         }
 
-        /* Guitar Strings */
+        .string-row {
+            display: flex;
+            height: 36px;
+            position: relative;
+            align-items: center;
+        }
+
         .string-line {
             position: absolute;
             left: 0;
             right: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            background: linear-gradient(to bottom, #cbd5e1, #64748b);
+            background: linear-gradient(to bottom, #94a3b8, #e2e8f0, #94a3b8);
+            z-index: 1;
             box-shadow: 0 2px 4px rgba(0,0,0,0.5);
-            z-index: 10;
         }
-        
-        /* Varying string thicknesses based on row (1 is highest pitch, 6 is lowest pitch) */
-        .fret-grid .row-1 .string-line { height: 1px; }
-        .fret-grid .row-2 .string-line { height: 1.5px; }
-        .fret-grid .row-3 .string-line { height: 2px; }
-        .fret-grid .row-4 .string-line { height: 2.5px; }
-        .fret-grid .row-5 .string-line { height: 3px; }
-        .fret-grid .row-6 .string-line { height: 4px; }
 
-        /* Fret Inlay Markers (Dots) */
-        .marker-dot {
+        .fret {
+            flex: 1;
+            border-right: 2px solid #52525b;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .fret.nut {
+            border-right: 6px solid #cbd5e1;
+            flex: 0.3; /* Narrow space for open strings */
+        }
+
+        .fret-marker {
             position: absolute;
-            width: 16px;
-            height: 16px;
-            background-color: #cbd5e1;
+            width: 14px;
+            height: 14px;
+            background-color: rgba(255, 255, 255, 0.15);
             border-radius: 50%;
+            top: 50%;
+            left: 50%;
             transform: translate(-50%, -50%);
-            opacity: 0.6;
-            z-index: 5;
+            z-index: 0;
         }
 
-        /* Note Marker bubbles — paper-informed palette */
-        .note-marker {
+        .fret-marker.double {
+            top: 30%;
+        }
+        .fret-marker.double-2 {
+            top: 70%;
+        }
+
+        .note-orb {
+            /* FIXED: Absolute positioning prevents the 26px orb from stretching narrow flex columns */
             position: absolute;
-            z-index: 20;
-            width: 28px;
-            height: 28px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 26px;
+            height: 26px;
             border-radius: 50%;
             display: flex;
-            align-items: center;
             justify-content: center;
-            font-size: 12px;
-            font-weight: 700;
-            color: white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            transition: all 0.2s ease-in-out;
+            align-items: center;
+            font-size: 11px;
+            font-weight: bold;
+            z-index: 10;
+            color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.8), inset 0 0 5px rgba(255,255,255,0.4);
             cursor: pointer;
-        }
-        .note-marker:hover {
-            transform: scale(1.2);
+            transition: transform 0.1s;
         }
 
-        /* Sa / Pa — brass anchors */
-        .note-sa {
-            background-color: #C8A24A;
-            border: 2px solid #E5C76B;
-            box-shadow: 0 0 12px rgba(200, 162, 74, 0.55);
-        }
-        .note-pa {
-            background-color: #C8A24A;
-            border: 2px solid #E5C76B;
-            box-shadow: 0 0 10px rgba(200, 162, 74, 0.4);
+        .note-orb:hover {
+            transform: translate(-50%, -50%) scale(1.2);
         }
 
-        /* Madhyama — vermillion */
-        .note-m {
-            background-color: #8B2E1F;
-            border: 2px solid #B54A3A;
-            box-shadow: 0 0 10px rgba(139, 46, 31, 0.45);
+        /* Core Chord Tones */
+        .color-root { background: radial-gradient(circle at 30% 30%, #ef4444, #991b1b); text-shadow: 0 1px 2px #000; }
+        .color-3rd  { background: radial-gradient(circle at 30% 30%, #facc15, #a16207); text-shadow: 0 1px 2px #000; color: #fff;}
+        .color-5th  { background: radial-gradient(circle at 30% 30%, #f97316, #9a3412); text-shadow: 0 1px 2px #000; }
+        .color-7th  { background: radial-gradient(circle at 30% 30%, #a855f7, #581c87); text-shadow: 0 1px 2px #000; }
+        
+        /* Deep Thought Tensions */
+        .color-tension-sweet   { background: radial-gradient(circle at 30% 30%, #22d3ee, #0891b2); text-shadow: 0 1px 2px #000; } /* 2nds/9ths, 6ths/13ths */
+        .color-tension-sus     { background: radial-gradient(circle at 30% 30%, #3b82f6, #1d4ed8); text-shadow: 0 1px 2px #000; } /* 4ths/11ths */
+        .color-tension-tritone { background: radial-gradient(circle at 30% 30%, #ec4899, #be185d); text-shadow: 0 1px 2px #000; } /* b5 / #4 */
+        .color-tension-dark    { background: radial-gradient(circle at 30% 30%, #84cc16, #4d7c0f); text-shadow: 0 1px 2px #000; } /* b2/b9, b6/b13 */
+
+        .fret-number-row {
+            display: flex;
+            padding-left: 20px;
+            min-width: 1200px;
         }
 
-        /* Lower tetrachord (R-G) — indigo cold pole */
-        .note-rg {
-            background-color: #3A5A6C;
-            border: 2px solid #5A7A8C;
-            box-shadow: 0 0 10px rgba(58, 90, 108, 0.4);
+        .fret-number {
+            flex: 1;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+            padding: 4px 0;
+        }
+        
+        .fret-number.nut-num {
+            flex: 0.3;
         }
 
-        /* Upper tetrachord (D-N) — slate / ink */
-        .note-dn {
-            background-color: #475569;
-            border: 2px solid #64748B;
-            box-shadow: 0 0 10px rgba(71, 85, 105, 0.35);
-        }
+        /* Scrollbar styling for a cleaner look */
+        ::-webkit-scrollbar { height: 10px; }
+        ::-webkit-scrollbar-track { background: #1e293b; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
-        /* Rough / vivadi perceptual beating — vermillion pulse */
-        .note-rough {
-            animation: roughPulse 2.4s ease-in-out infinite;
-        }
-        @keyframes roughPulse {
-            0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.6); }
-            50%      { box-shadow: 0 0 20px rgba(239, 68, 68, 1.0); }
-        }
-
-        /* Scrollbar styling for fretboard container */
-        .fretboard-container::-webkit-scrollbar {
-            height: 12px;
-        }
-        .fretboard-container::-webkit-scrollbar-track {
-            background: #1e293b;
-            border-radius: 6px;
-        }
-        .fretboard-container::-webkit-scrollbar-thumb {
-            background-color: #475569;
-            border-radius: 6px;
-        }
-
-        /* Input styling */
-        .custom-input {
-            background-color: #1e293b;
-            border: 1px solid #334155;
-            color: #f8fafc;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .custom-input:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-        }
-
-        /* Badges */
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 600;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-        }
-        .badge-extremal { background: rgba(139, 46, 31, 0.25); color: #fca5a5; border: 1px solid rgba(139, 46, 31, 0.4); }
-        .badge-naive    { background: rgba(200, 162, 74, 0.2); color: #fde68a; border: 1px solid rgba(200, 162, 74, 0.35); }
-        .badge-exception{ background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.35); }
-        .badge-avivadi  { background: rgba(71, 85, 105, 0.3); color: #cbd5e1; border: 1px solid rgba(71, 85, 105, 0.45); }
-        .badge-orbit    { background: rgba(58, 90, 108, 0.25); color: #a5f3fc; border: 1px solid rgba(58, 90, 108, 0.4); }
-        .badge-forte    { background: rgba(59, 130, 246, 0.2); color: #bfdbfe; border: 1px solid rgba(59, 130, 246, 0.35); }
     </style>
 </head>
-<body class="min-h-screen flex flex-col p-4 md:p-8">
+<body class="p-4 md:p-8">
 
-    <div class="max-w-6xl mx-auto w-full">
+    <a href="index.html" class="fixed top-4 left-4 z-50 text-slate-400 hover:text-white text-sm font-medium transition-colors flex items-center gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+        Back to Melagabra
+    </a>
+
+    <div class="max-w-7xl mx-auto space-y-6">
         
-        <div class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 mb-2">
-                12-Bit Vector Fretboard
-            </h1>
-            <p class="text-slate-400">Custom Tuning: <strong class="text-white bg-slate-800 px-2 py-1 rounded">F - A - C# - F - A - C#</strong></p>
-        </div>
-
-        <div class="bg-slate-800 rounded-xl p-6 shadow-xl mb-8 flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between border border-slate-700">
+        <!-- Header & Controls -->
+        <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-slate-700 pb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-white tracking-tight">Symmetrical Fretboard</h1>
+                <p class="text-slate-400 text-sm mt-1">Strict Major 3rds Tuning (F - A - C# - F - A - C#)</p>
+            </div>
             
-            <div class="flex flex-wrap gap-4 items-end w-full lg:w-auto">
-                <div class="flex flex-col gap-1">
-                    <label for="melaSelect" class="text-sm text-slate-400 font-semibold">Melakarta</label>
-                    <select id="melaSelect" class="custom-input w-48 text-sm">
-                        <option value="">Custom / unknown</option>
+            <div class="flex flex-wrap gap-3 items-center bg-slate-800 p-3 rounded-lg shadow-inner border border-slate-700">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Root Note</label>
+                    <select id="rootSelect" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-cyan-500">
+                        <!-- Populated by JS -->
                     </select>
                 </div>
-
-                <div class="flex flex-col gap-1">
-                    <label for="hexInput" class="text-sm text-slate-400 font-semibold">Hex Code (Max: FFF)</label>
-                    <input type="text" id="hexInput" class="custom-input w-32 uppercase font-mono text-lg" value="D59" maxlength="3" placeholder="e.g. D59">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Hex Vector</label>
+                    <input type="text" id="hexInput" value="D55" class="bg-slate-900 border border-slate-600 rounded w-24 px-2 py-1 text-sm font-mono focus:outline-none focus:border-cyan-500 uppercase" maxlength="3">
                 </div>
-
-                <div class="flex flex-col gap-1">
-                    <label for="rootSelect" class="text-sm text-slate-400 font-semibold">Scale Root</label>
-                    <select id="rootSelect" class="custom-input w-24 text-lg">
-                        <option value="C">C</option>
-                        <option value="C#">C#</option>
-                        <option value="D">D</option>
-                        <option value="D#">D#</option>
-                        <option value="E">E</option>
-                        <option value="F" selected>F</option>
-                        <option value="F#">F#</option>
-                        <option value="G">G</option>
-                        <option value="G#">G#</option>
-                        <option value="A">A</option>
-                        <option value="A#">A#</option>
-                        <option value="B">B</option>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Vector Direction</label>
+                    <select id="bitDirSelect" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-cyan-500">
+                        <option value="LTR">Left-to-Right (MSB = Root)</option>
+                        <option value="RTL">Right-to-Left (LSB = Root)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Display</label>
+                    <select id="displaySelect" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-cyan-500">
+                        <option value="INTERVAL">Intervals</option>
+                        <option value="NOTE">Notes</option>
                     </select>
                 </div>
             </div>
-
-            <div class="flex flex-col gap-3 w-full lg:w-auto">
-                <div class="flex items-center justify-between lg:justify-start gap-4">
-                    <span class="text-sm text-slate-400 font-semibold">Display:</span>
-                    <div class="flex bg-slate-900 rounded-lg p-1 border border-slate-700">
-                        <button id="showNotesBtn" class="px-3 py-1 text-sm rounded-md bg-blue-600 text-white font-medium transition-colors">Notes</button>
-                        <button id="showIntervalsBtn" class="px-3 py-1 text-sm rounded-md text-slate-400 hover:text-white font-medium transition-colors">Intervals</button>
-                    </div>
-                </div>
-            </div>
-
         </div>
 
-        <div class="bg-slate-800/50 rounded-xl p-4 mb-8 border border-slate-700/50">
-            <h2 class="text-sm text-slate-400 font-semibold uppercase tracking-wider mb-3">Vector Analysis</h2>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            <div id="errorMessage" class="hidden bg-red-900/50 text-red-200 p-3 rounded-lg border border-red-800 mb-3">
-                Invalid Hex Code. Please enter valid hexadecimal characters (0-9, A-F).
-            </div>
-
-            <div id="analysisContent" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Scale Intelligence Panel -->
+            <div class="lg:col-span-1 bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-lg flex flex-col justify-between">
                 <div>
-                    <div class="text-sm text-slate-400 mb-1">12-Bit Binary Map (Sa←left):</div>
-                    <div class="font-mono text-xl tracking-widest text-emerald-400" id="binaryDisplay">110101011001</div>
-                </div>
-                <div>
-                    <div class="text-sm text-slate-400 mb-1">Active Intervals from Root:</div>
-                    <div class="flex flex-wrap gap-2" id="intervalDisplay">
-                        <!-- Intervals injected here -->
+                    <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Scale Intelligence</h2>
+                    <div class="flex items-center gap-4 mb-3">
+                        <div class="text-2xl font-bold text-white leading-tight" id="scaleTitle">Loading...</div>
                     </div>
+                    <p id="scaleInfo" class="text-slate-300 text-sm leading-relaxed mb-4">...</p>
                 </div>
-            </div>
-        </div>
-
-        <!-- Scale Intelligence Card -->
-        <div id="scaleInfoCard" class="bg-indigo-900/20 rounded-xl p-5 mb-8 border border-indigo-800/30 transition-all duration-300">
-            <h2 class="text-xs text-indigo-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                Scale Match Intelligence
-            </h2>
-            <h3 id="scaleNameDisplay" class="text-xl font-bold text-indigo-300 mb-2">Unknown Vector</h3>
-            <div class="flex flex-wrap gap-2 mb-3" id="scaleAliasesDisplay"></div>
-            <p id="scaleDescDisplay" class="text-slate-400 text-sm leading-relaxed">This interval structure does not match our database of known scales. It is a unique custom pattern.</p>
-
-            <!-- Rich Melakarta details (populated when a known mela is matched) -->
-            <div id="melaDetails" class="hidden mt-4 pt-4 border-t border-indigo-800/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm"></div>
-        </div>
-
-        <div class="bg-slate-800 p-4 rounded-xl shadow-2xl border border-slate-700">
-            <!-- Scrollable container for smaller screens -->
-            <div class="fretboard-container overflow-x-auto pb-4">
                 
-                <!-- Fret numbers top bar -->
-                <div class="flex text-slate-500 text-xs font-bold mb-2 ml-[50px]" style="min-width: calc(24 * 60px);" id="fretNumbers">
-                    <!-- Injected by JS -->
-                </div>
-
-                <!-- The Actual Fretboard -->
-                <div class="fretboard-wood rounded-l-md rounded-r-3xl relative" id="fretboard">
-                    <!-- Fret Grid will be injected here via JS -->
+                <div class="flex gap-1 font-mono text-xs overflow-x-auto pb-1 mt-auto" id="binaryDisplay">
+                    <!-- Binary bits injected here -->
                 </div>
             </div>
+
+            <!-- Deep Harmonic Legend -->
+            <div class="lg:col-span-2 bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-lg">
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Improvisation & Harmonic Function Legend</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                    <!-- Core Tones -->
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold text-slate-500 border-b border-slate-700 pb-1">Core Tones</h3>
+                        <div class="flex items-start gap-3">
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></span> 
+                            <div><strong class="text-slate-200">Roots (R):</strong> The absolute home base. Complete resolution.</div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]"></span> 
+                            <div><strong class="text-slate-200">Perfect 5ths (5):</strong> Power and stability. The strongest support for the root.</div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]"></span> 
+                            <div><strong class="text-slate-200">3rds (b3, 3):</strong> The character notes. They tell your ear if the mood is Major or Minor. Great phrase enders.</div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"></span> 
+                            <div><strong class="text-slate-200">7ths (b7, 7):</strong> Strong pull and gravity leading back to the root, or providing a sophisticated jazzy/bluesy feel.</div>
+                        </div>
+                    </div>
+
+                    <!-- Tension Types -->
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold text-slate-500 border-b border-slate-700 pb-1">Tension Types</h3>
+                        <div class="flex items-start gap-3">
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]"></span> 
+                            <div><strong class="text-slate-200">Sweet Tensions (2, 6):</strong> Airy, floating extensions. Beautiful to hold and rest on for a dreamy, unresolved sound.</div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></span> 
+                            <div><strong class="text-slate-200">Suspended (4):</strong> Structural tension that yearns to resolve downward into the 3rd.</div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.5)]"></span> 
+                            <div><strong class="text-slate-200">Tritone (b5):</strong> The sharpest symmetrical tension. Piercing, bluesy, demands collapse or expansion.</div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-lime-500 shadow-[0_0_8px_rgba(132,204,22,0.5)]"></span> 
+                            <div><strong class="text-slate-200">Dark Gravity (b2, b6):</strong> Acidic friction. These sit a half-step above chord tones, possessing a violent downward pull. Use for tragic, exotic suspense.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fretboard Render Area -->
+        <div class="fretboard-container" id="fretboardContainer">
+            <!-- Injected by JS -->
         </div>
 
     </div>
 
-    <script type="module">
-        import {
-            MELA, BITS_TO_MELA, PITCH_TO_BIT, PITCH_NAMES_SHORT, PITCH_NAMES_FULL,
-            vivadiFlags, orbitMembers, orbitId, ADMISSIBLE_NIBBLES_RG, ADMISSIBLE_NIBBLES_DN
-        } from './data.js';
+<script>
+    // Musical Constants
+    const CHROMATIC = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const INTERVAL_NAMES = ["R", "b2", "2", "b3", "3", "4", "b5", "5", "b6", "6", "b7", "7"];
+    const NUM_FRETS = 24;
 
-        // ─── Constants ───────────────────────────────────────────
-        const CHROMATIC_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-        const INTERVAL_NAMES = ['Sa', 'R₁', 'R₂', 'R₃', 'G₃', 'M₁', 'M₂', 'Pa', 'D₁', 'D₂', 'D₃', 'N₃'];
+    // Strict Major 3rds Tuning (1st to 6th String -> High to Low Pitch on Screen)
+    // C# - A - F - C# - A - F
+    const STRING_ROOTS = [1, 9, 5, 1, 9, 5]; 
 
-        // Custom Tuning: F - A - C# - F - A - C#
-        const TUNING_NOTES = ['C#', 'A', 'F', 'C#', 'A', 'F'];
+    // Scale Dictionary (Will be populated with Western + 72 Melakartas)
+    let SCALE_DICT = [];
 
-        // Minimal Western dictionary for non-Melakarta custom vectors
-        const WESTERN_SCALES = {
-            '101011010101': { names: ['Major / Ionian'], desc: 'The fundamental scale of Western music.' },
-            '101101010110': { names: ['Dorian Mode'], desc: 'Minor with a natural 6th.' },
-            '110101011010': { names: ['Phrygian Mode'], desc: 'Minor with a flat 2nd.' },
-            '101010110101': { names: ['Lydian Mode'], desc: 'Major with a raised 4th.' },
-            '101011010110': { names: ['Mixolydian Mode'], desc: 'Major with a flat 7th.' },
-            '101101011010': { names: ['Minor / Aeolian'], desc: 'The natural minor scale.' },
-            '110101101010': { names: ['Locrian Mode'], desc: 'Highly unresolved minor mode.' },
-            '101010010100': { names: ['Major Pentatonic'], desc: '5-note scale lacking half-steps.' },
-            '100101010010': { names: ['Minor Pentatonic'], desc: 'Backbone of blues and rock solos.' },
-            '100101110010': { names: ['Blues Scale'], desc: 'Minor pentatonic with flat 5.' },
-            '101101011001': { names: ['Harmonic Minor'], desc: 'Minor with major 7th.' },
-            '101101010101': { names: ['Melodic Minor (asc)'], desc: 'Minor with major 6th and 7th.' },
-            '101010101010': { names: ['Whole Tone'], desc: '6-note symmetrical scale.' },
-            '111111111111': { names: ['Chromatic'], desc: 'All twelve pitch classes.' },
-        };
+    const MELAKARTA_NAMES = [
+        "Kanakangi", "Ratnangi", "Ganamurti", "Vanaspati", "Manavati", "Tanarupi",
+        "Senavati", "Hanumatodi", "Dhenuka", "Natakapriya", "Kokilapriya", "Rupavati",
+        "Gayakapriya", "Vakulabharanam", "Mayamalavagowla", "Chakravakam", "Suryakantam", "Hatakambari",
+        "Jhankaradhvani", "Natabhairavi", "Keeravani", "Kharaharapriya", "Gourimanohari", "Varunapriya",
+        "Mararanjani", "Charukesi", "Sarasangi", "Harikambhoji", "Dheerasankarabharanam", "Naganandini",
+        "Yagapriya", "Ragavardhini", "Gangeyabhushani", "Vagadhishvari", "Shulini", "Chalanata",
+        "Salagam", "Jalarnavam", "Jhalavarali", "Navaneetam", "Pavani", "Raghupriya",
+        "Gavambhodi", "Bhavapriya", "Shubhapantuvarali", "Shadvidhamargini", "Suvarnangi", "Divyamani",
+        "Dhavalambari", "Namanarayani", "Kamavardhani", "Ramapriya", "Gamanashrama", "Vishwambari",
+        "Shamalangi", "Shanmukhapriya", "Simhendramadhyamam", "Hemavati", "Dharmavati", "Neetimati",
+        "Kantamani", "Rishabhapriya", "Latangi", "Vachaspati", "Mechakalyani", "Chitrambari",
+        "Sucharitra", "Jyotisvarupini", "Dhatuvardhani", "Nasikabhushani", "Kosalam", "Rasikapriya"
+    ];
 
-        // ─── State ───────────────────────────────────────────────
-        let displayMode = 'NOTES'; // 'NOTES' or 'INTERVALS'
-        let activeScaleData = {
-            rootNoteIndex: 5, // F
-            activeIntervals: new Array(12).fill(false),
-            bits: 0,
-            matchedMela: null,
-        };
+    function buildScaleDictionary() {
+        // Base Western / Common Scales
+        const standardScales = [
+            { name: "Major (Ionian)", intervals: [0, 2, 4, 5, 7, 9, 11], info: "The standard Western diatonic major scale. Bright and stable." },
+            { name: "Natural Minor (Aeolian)", intervals: [0, 2, 3, 5, 7, 8, 10], info: "The relative minor of the major scale. Sad or solemn tone." },
+            { name: "Harmonic Minor", intervals: [0, 2, 3, 5, 7, 8, 11], info: "Minor scale with a raised 7th to create a strong pull to the root." },
+            { name: "Melodic Minor (Ascending)", intervals: [0, 2, 3, 5, 7, 9, 11], info: "Minor 3rd but major 6th and 7th. Used heavily in jazz." },
+            { name: "Dorian", intervals: [0, 2, 3, 5, 7, 9, 10], info: "Minor with a major 6th. Popular in blues, jazz, and rock." },
+            { name: "Phrygian", intervals: [0, 1, 3, 5, 7, 8, 10], info: "Minor with a flat 2nd. Has a Spanish or Middle-Eastern flavor." },
+            { name: "Lydian", intervals: [0, 2, 4, 6, 7, 9, 11], info: "Major with a raised 4th. Dreamy, floating, cinematic sound." },
+            { name: "Mixolydian", intervals: [0, 2, 4, 5, 7, 9, 10], info: "Major with a flat 7th. The dominant chord scale, fundamental to Blues." },
+            { name: "Locrian", intervals: [0, 1, 3, 5, 6, 8, 10], info: "The only diatonic mode with a diminished 5th. Very unstable." },
+            { name: "Major Pentatonic", intervals: [0, 2, 4, 7, 9], info: "5-note scale found in folk music globally." },
+            { name: "Minor Pentatonic", intervals: [0, 3, 5, 7, 10], info: "The foundation of rock and blues solos." },
+            { name: "Blues Scale", intervals: [0, 3, 5, 6, 7, 10], info: "Minor pentatonic with the added flat 5 'blue note'." },
+            { name: "Whole Tone", intervals: [0, 2, 4, 6, 8, 10], info: "Symmetrical scale made entirely of whole steps. Dreamy, ambiguous." },
+            { name: "Diminished (H-W)", intervals: [0, 1, 3, 4, 6, 7, 9, 10], info: "Symmetrical half-whole alternating scale." },
+            { name: "Diminished (W-H)", intervals: [0, 2, 3, 5, 6, 8, 9, 11], info: "Symmetrical whole-half alternating scale. Used often over diminished 7th chords." },
+            { name: "Neapolitan Major", intervals: [0, 1, 3, 5, 7, 9, 11], info: "Major scale with a flat 2nd." },
+            { name: "Neapolitan Minor", intervals: [0, 1, 3, 5, 7, 8, 11], info: "Minor scale with a flat 2nd and major 7th." },
+            { name: "Phrygian Dominant", intervals: [0, 1, 4, 5, 7, 8, 10], info: "The 5th mode of Harmonic Minor. Highly exotic, middle-eastern flavor." },
+            { name: "Lydian Dominant", intervals: [0, 2, 4, 6, 7, 9, 10], info: "The 4th mode of Melodic Minor. Excellent for dominant chords with extensions." },
+            { name: "Altered Scale (Super Locrian)", intervals: [0, 1, 3, 4, 6, 8, 10], info: "The 7th mode of Melodic Minor. Contains every altered tension (b9, #9, b5, #5)." },
+            { name: "Hirajoshi", intervals: [0, 2, 3, 7, 8], info: "Traditional Japanese pentatonic scale." },
+            { name: "In Sen", intervals: [0, 1, 5, 7, 10], info: "Traditional Japanese scale, often played on the Koto." },
+            { name: "Prometheus", intervals: [0, 2, 4, 6, 9, 10], info: "Mystic scale invented by Alexander Scriabin." },
+            { name: "Enigmatic", intervals: [0, 1, 4, 6, 8, 10, 11], info: "Unusual scale famously used by Joe Satriani." },
+            { name: "Augmented", intervals: [0, 3, 4, 7, 8, 11], info: "Symmetrical scale of alternating minor thirds and half steps." }
+        ];
 
-        // ─── DOM Elements ────────────────────────────────────────
-        const melaSelect = document.getElementById('melaSelect');
-        const hexInput = document.getElementById('hexInput');
-        const rootSelect = document.getElementById('rootSelect');
-        const showNotesBtn = document.getElementById('showNotesBtn');
-        const showIntervalsBtn = document.getElementById('showIntervalsBtn');
-        const fretboardEl = document.getElementById('fretboard');
-        const fretNumbersEl = document.getElementById('fretNumbers');
-        const binaryDisplay = document.getElementById('binaryDisplay');
-        const intervalDisplay = document.getElementById('intervalDisplay');
-        const errorMessage = document.getElementById('errorMessage');
-        const analysisContent = document.getElementById('analysisContent');
-        const scaleInfoCard = document.getElementById('scaleInfoCard');
-        const scaleNameDisplay = document.getElementById('scaleNameDisplay');
-        const scaleAliasesDisplay = document.getElementById('scaleAliasesDisplay');
-        const scaleDescDisplay = document.getElementById('scaleDescDisplay');
-        const melaDetails = document.getElementById('melaDetails');
+        SCALE_DICT = [...standardScales];
 
-        // ─── Populate Melakarta selector ─────────────────────────
-        for (let n = 1; n <= 72; n++) {
-            const m = MELA[n];
-            const opt = document.createElement('option');
-            opt.value = n;
-            opt.textContent = `Mela ${n} · ${m.name}`;
-            melaSelect.appendChild(opt);
-        }
-
-        // ─── Core logic ──────────────────────────────────────────
-        function parseHexAndBuildScale() {
-            const hex = hexInput.value.trim().toUpperCase();
-            const rootNote = rootSelect.value;
-
-            // Validation
-            const hexRegex = /^[0-9A-F]{1,3}$/;
-            if (!hexRegex.test(hex)) {
-                showError(true);
-                return;
-            }
-            showError(false);
-
-            const bits = parseInt(hex, 16) & 0xFFF;
-            activeScaleData.bits = bits;
-            activeScaleData.rootNoteIndex = CHROMATIC_NOTES.indexOf(rootNote);
-            activeScaleData.activeIntervals.fill(false);
-
-            // Determine active intervals using the paper's PITCH_TO_BIT mapping
-            const activePCs = [];
-            for (let pc = 0; pc < 12; pc++) {
-                const isActive = !!(bits & (1 << PITCH_TO_BIT[pc]));
-                activeScaleData.activeIntervals[pc] = isActive;
-                if (isActive) activePCs.push(pc);
-            }
-
-            // Build canonical pattern (index = pitch class / interval from Sa)
-            const canonicalPattern = activeScaleData.activeIntervals.map(x => x ? '1' : '0').join('');
-
-            // Binary display — true bit-string order, colored by paper region
-            // b[0]=bit11(Sa), b[1..4]=bits10-7(R-G), b[5]=bit6(M2), b[6]=bit5(M1),
-            // b[7]=bit4(Pa), b[8..11]=bits3-0(D-N)
-            const b = bits.toString(2).padStart(12, '0');
-            const regionSpans = [
-                { idx: 0,  cls: 'text-amber-400 font-bold', title: 'Sa (bit 11)' },
-                { idx: 1,  cls: 'text-cyan-300', title: 'R-G bit 10' },
-                { idx: 2,  cls: 'text-cyan-300', title: 'R-G bit 9' },
-                { idx: 3,  cls: 'text-cyan-300', title: 'R-G bit 8' },
-                { idx: 4,  cls: 'text-cyan-300', title: 'R-G bit 7' },
-                { idx: 5,  cls: 'text-red-300', title: 'M₂ (bit 6)' },
-                { idx: 6,  cls: 'text-red-300', title: 'M₁ (bit 5)' },
-                { idx: 7,  cls: 'text-amber-400 font-bold', title: 'Pa (bit 4)' },
-                { idx: 8,  cls: 'text-blue-300', title: 'D-N bit 3' },
-                { idx: 9,  cls: 'text-blue-300', title: 'D-N bit 2' },
-                { idx: 10, cls: 'text-blue-300', title: 'D-N bit 1' },
-                { idx: 11, cls: 'text-blue-300', title: 'D-N bit 0' },
-            ];
-            binaryDisplay.innerHTML = regionSpans.map(r => {
-                const c = b[r.idx];
-                const active = c === '1' ? r.cls + ' font-bold' : 'text-slate-500';
-                return `<span class="${active}" title="${r.title}">${c}</span>`;
-            }).join('');
-
-            // Interval display
-            let intervalsHTML = '';
-            for (let pc = 0; pc < 12; pc++) {
-                if (!activeScaleData.activeIntervals[pc]) continue;
-                const noteIndex = (activeScaleData.rootNoteIndex + pc) % 12;
-                const noteName = CHROMATIC_NOTES[noteIndex];
-                const intervalName = INTERVAL_NAMES[pc];
-                const isRoot = pc === 0;
-                const badgeColor = isRoot
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
-                    : 'bg-blue-500/20 text-blue-300 border-blue-500/50';
-                intervalsHTML += `
-                    <div class="px-3 py-1 rounded border ${badgeColor} text-sm flex items-center gap-2">
-                        <span class="font-bold">${intervalName}</span>
-                        <span class="opacity-50">|</span>
-                        <span>${noteName}</span>
-                    </div>
-                `;
-            }
-            intervalDisplay.innerHTML = intervalsHTML || '<span class="text-slate-500 italic">No notes active</span>';
-
-            // Scale match
-            const matchedMelaNum = BITS_TO_MELA.get(bits);
-            activeScaleData.matchedMela = matchedMelaNum ? MELA[matchedMelaNum] : null;
-            renderScaleInfo(activeScaleData.matchedMela, canonicalPattern, bits, activePCs);
-
-            // Re-render fretboard
-            renderFretboard();
-            renderFretNumbers();
-        }
-
-        function renderScaleInfo(mela, canonicalPattern, bits, activePCs) {
-            if (mela) {
-                // Match Found — Styling
-                scaleInfoCard.classList.remove('border-indigo-800/30', 'bg-indigo-900/20');
-                scaleInfoCard.classList.add('border-emerald-500/50', 'bg-emerald-900/20');
-
-                scaleNameDisplay.textContent = `Mela ${mela.n}: ${mela.name}`;
-                scaleNameDisplay.className = 'text-2xl font-bold text-emerald-400 mb-2';
-
-                const aliases = [mela.nameIAST];
-                if (mela.forte) aliases.push(`Forte ${mela.forte}`);
-                scaleAliasesDisplay.innerHTML = aliases
-                    .map(n => `<span class="bg-emerald-800/50 text-emerald-100 text-xs px-2 py-1 rounded border border-emerald-700/50">${n}</span>`)
-                    .join('');
-
-                const v = mela.vivadi;
-                let vText = 'Avivadi';
-                if (v.extremal) vText = 'Extremally vivadi (rough)';
-                else if (v.exception) vText = 'Exception set X (naïve but smooth)';
-                else if (v.naive) vText = 'Naïve vivadi';
-
-                scaleDescDisplay.innerHTML = `
-                    <span class="text-emerald-300">${vText}</span> —
-                    ${mela.nameIAST} is a heptatonic parent raga in the 72 Melakarta system.
-                    Forte class ${mela.forte}; IC vector ⟨${mela.icv.join(', ')}⟩.
-                `;
-
-                // Rich details grid
-                melaDetails.classList.remove('hidden');
-                const oid = mela.orbitId;
-                const orb = orbitMembers(oid);
-                melaDetails.innerHTML = `
-                    <div class="bg-slate-900/40 rounded p-2 border border-slate-700/40">
-                        <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Vivadi</div>
-                        <span class="badge ${v.extremal ? 'badge-extremal' : v.exception ? 'badge-exception' : v.naive ? 'badge-naive' : 'badge-avivadi'}">
-                            ${v.extremal ? 'Extremal' : v.exception ? 'Exception X' : v.naive ? 'Naïve' : 'Avivadi'}
-                        </span>
-                    </div>
-                    <div class="bg-slate-900/40 rounded p-2 border border-slate-700/40">
-                        <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Forte</div>
-                        <span class="badge badge-forte">${mela.forte}</span>
-                    </div>
-                    <div class="bg-slate-900/40 rounded p-2 border border-slate-700/40">
-                        <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Orbit ${oid}</div>
-                        <div class="font-mono text-xs text-slate-300">{${orb.join(', ')}}</div>
-                    </div>
-                    <div class="bg-slate-900/40 rounded p-2 border border-slate-700/40">
-                        <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Nibbles</div>
-                        <div class="font-mono text-xs text-slate-300">R-G 0x${mela.rgNibble.toString(16).toUpperCase()} · D-N 0x${mela.dnNibble.toString(16).toUpperCase()}</div>
-                    </div>
-                `;
-            } else {
-                // No Match — check Western fallback
-                const western = WESTERN_SCALES[canonicalPattern];
-                if (western) {
-                    scaleInfoCard.classList.remove('border-indigo-800/30', 'bg-indigo-900/20');
-                    scaleInfoCard.classList.add('border-emerald-500/50', 'bg-emerald-900/20');
-                    scaleNameDisplay.textContent = western.names[0];
-                    scaleNameDisplay.className = 'text-2xl font-bold text-emerald-400 mb-2';
-                    scaleAliasesDisplay.innerHTML = '';
-                    scaleDescDisplay.textContent = western.desc;
-                    melaDetails.classList.add('hidden');
-                } else {
-                    // No Match — Styling
-                    scaleInfoCard.classList.remove('border-emerald-500/50', 'bg-emerald-900/20');
-                    scaleInfoCard.classList.add('border-indigo-800/30', 'bg-indigo-900/20');
-
-                    scaleNameDisplay.textContent = 'Unknown / Custom Vector';
-                    scaleNameDisplay.className = 'text-xl font-bold text-indigo-300 mb-2';
-
-                    scaleAliasesDisplay.innerHTML = `<span class="bg-indigo-800/50 text-indigo-200 text-xs px-2 py-1 rounded border border-indigo-700/50">${activePCs.length}-note set</span>`;
-                    scaleDescDisplay.textContent = 'This exact interval structure does not match our database of common or theoretical scales. It represents a unique, mathematically custom scale pattern.';
-                    melaDetails.classList.add('hidden');
-                }
-            }
-        }
-
-        function showError(show) {
-            if (show) {
-                errorMessage.classList.remove('hidden');
-                analysisContent.classList.add('hidden');
-            } else {
-                errorMessage.classList.add('hidden');
-                analysisContent.classList.remove('hidden');
-            }
-        }
-
-        function getNoteClasses(pc, bits) {
-            const classes = ['note-marker'];
-            if (pc === 0) classes.push('note-sa');
-            else if (pc === 7) classes.push('note-pa');
-            else if (pc === 5 || pc === 6) classes.push('note-m');
-            else if (pc >= 1 && pc <= 4) classes.push('note-rg');
-            else classes.push('note-dn');
-
-            // Rough / vivadi perceptual beating (§7.4)
-            const vf = vivadiFlags(bits);
-            if (vf.roughPCs.includes(pc)) classes.push('note-rough');
-
-            return classes.join(' ');
-        }
-
-        function renderFretboard() {
-            fretboardEl.innerHTML = '';
-
-            const gridWrapper = document.createElement('div');
-            gridWrapper.className = 'fret-grid';
-            fretboardEl.appendChild(gridWrapper);
-
-            drawInlays(gridWrapper);
-
-            const numStrings = 6;
-            const numFrets = 25; // 0 (open) to 24
-
-            for (let stringIdx = 0; stringIdx < numStrings; stringIdx++) {
-                const stringNote = TUNING_NOTES[stringIdx];
-                const stringBaseNoteIndex = CHROMATIC_NOTES.indexOf(stringNote);
-
-                for (let fret = 0; fret < numFrets; fret++) {
-                    const cell = document.createElement('div');
-                    cell.className = `fret-cell row-${stringIdx + 1} ${fret === 0 ? 'nut-divider' : ''}`;
-
-                    const stringLine = document.createElement('div');
-                    stringLine.className = 'string-line';
-                    cell.appendChild(stringLine);
-
-                    const currentNoteIndex = (stringBaseNoteIndex + fret) % 12;
-                    const intervalFromRoot = (currentNoteIndex - activeScaleData.rootNoteIndex + 12) % 12;
-
-                    if (activeScaleData.activeIntervals[intervalFromRoot]) {
-                        const noteMarker = document.createElement('div');
-                        noteMarker.className = getNoteClasses(intervalFromRoot, activeScaleData.bits);
-
-                        if (displayMode === 'NOTES') {
-                            noteMarker.textContent = CHROMATIC_NOTES[currentNoteIndex];
-                        } else {
-                            noteMarker.textContent = PITCH_NAMES_SHORT[intervalFromRoot];
-                        }
-
-                        noteMarker.title = `${CHROMATIC_NOTES[currentNoteIndex]} (${PITCH_NAMES_FULL[intervalFromRoot]})`;
-                        cell.appendChild(noteMarker);
+        // Generate the 72 Carnatic Melakarta Scales
+        const purvanga = [[1, 2], [1, 3], [1, 4], [2, 3], [2, 4], [3, 4]]; // b2/bb3, b2/b3, b2/M3, M2/b3, M2/M3, #2/M3
+        const uttaranga = [[8, 9], [8, 10], [8, 11], [9, 10], [9, 11], [10, 11]];
+        
+        let melaIndex = 0;
+        for (let m of [5, 6]) { // Ma1 (Perfect 4th), Ma2 (Augmented 4th)
+            for (let p of purvanga) {
+                for (let u of uttaranga) {
+                    let intervals = [0, p[0], p[1], m, 7, u[0], u[1]];
+                    
+                    // Check if it matches an existing Western scale
+                    let existing = SCALE_DICT.find(s => JSON.stringify(s.intervals) === JSON.stringify(intervals));
+                    
+                    if (existing) {
+                        existing.name = `${existing.name} / Melakarta ${melaIndex + 1}: ${MELAKARTA_NAMES[melaIndex]}`;
+                        existing.info += ` Also part of the Carnatic Melakarta system.`;
+                    } else {
+                        SCALE_DICT.push({
+                            name: `Melakarta ${melaIndex + 1}: ${MELAKARTA_NAMES[melaIndex]}`,
+                            intervals: intervals,
+                            info: `Carnatic parent scale (Raga). Generated systematically via the Purvanga/Uttaranga tetrachord mathematical matrix.`
+                        });
                     }
-
-                    gridWrapper.appendChild(cell);
+                    melaIndex++;
                 }
             }
         }
+    }
 
-        function renderFretNumbers() {
-            fretNumbersEl.innerHTML = '';
-            for (let f = 1; f <= 24; f++) {
-                const d = document.createElement('div');
-                d.style.width = '60px';
-                d.style.textAlign = 'center';
-                d.textContent = f;
-                fretNumbersEl.appendChild(d);
+    // UI Initialization
+    function initUI() {
+        const rootSelect = document.getElementById('rootSelect');
+        CHROMATIC.forEach((note, index) => {
+            let opt = document.createElement('option');
+            opt.value = index;
+            opt.innerText = note;
+            if(note === "C") opt.selected = true; // Default C
+            rootSelect.appendChild(opt);
+        });
+
+        document.getElementById('hexInput').addEventListener('input', update);
+        document.getElementById('rootSelect').addEventListener('change', update);
+        document.getElementById('bitDirSelect').addEventListener('change', update);
+        document.getElementById('displaySelect').addEventListener('change', update);
+    }
+
+    function getScaleData() {
+        let hex = document.getElementById('hexInput').value.trim();
+        if (!/^[0-9A-Fa-f]{1,3}$/.test(hex)) hex = "0"; // fallback
+
+        let dir = document.getElementById('bitDirSelect').value;
+        
+        // Parse hex to 12 bit binary string
+        let num = parseInt(hex, 16);
+        let binStr = (num & 0xFFF).toString(2).padStart(12, '0');
+
+        let activeIntervals = [];
+        
+        // Map bits to intervals
+        for (let i = 0; i < 12; i++) {
+            let bit = (dir === 'LTR') ? binStr[i] : binStr[11 - i];
+            if (bit === '1') {
+                activeIntervals.push(i);
             }
         }
 
-        function drawInlays(container) {
-            const cellWidth = 60;
-            const nutWidth = 50;
-            const singleDotFrets = [3, 5, 7, 9, 15, 17, 19, 21];
-            const doubleDotFrets = [12, 24];
+        return { binStr, activeIntervals, dir };
+    }
 
-            const addDot = (fret, rowIndex) => {
-                const dot = document.createElement('div');
-                dot.className = 'marker-dot';
-                const xPos = nutWidth + (fret - 1) * cellWidth + (cellWidth / 2);
-                const yPos = rowIndexToPixel(rowIndex);
-                dot.style.left = `${xPos}px`;
-                dot.style.top = `${yPos}px`;
-                container.appendChild(dot);
-            };
+    // Deep Harmonic Function Color Mapping
+    function determineHarmonicColor(interval) {
+        // Core Tones
+        if (interval === 0) return 'color-root';
+        if (interval === 7) return 'color-5th';
+        if (interval === 3 || interval === 4) return 'color-3rd';
+        if (interval === 10 || interval === 11) return 'color-7th';
+        
+        // Deep Thought Tensions
+        if (interval === 2 || interval === 9) return 'color-tension-sweet'; // 2nds, 6ths (Airy, extensions)
+        if (interval === 5) return 'color-tension-sus'; // 4ths (Suspended)
+        if (interval === 6) return 'color-tension-tritone'; // b5 / #4 (Piercing, bluesy)
+        if (interval === 1 || interval === 8) return 'color-tension-dark'; // b2, b6 (Heavy downward gravity)
+        
+        return 'color-tension-sweet'; // Fallback
+    }
 
-            singleDotFrets.forEach(fret => addDot(fret, 3));
-            doubleDotFrets.forEach(fret => {
-                addDot(fret, 1.5);
-                addDot(fret, 4.5);
-            });
+    function renderIntelligence(activeIntervals, binStr, dir) {
+        let titleEl = document.getElementById('scaleTitle');
+        let infoEl = document.getElementById('scaleInfo');
+        let binEl = document.getElementById('binaryDisplay');
+
+        // Render bits visually
+        binEl.innerHTML = '';
+        for (let i = 0; i < 12; i++) {
+            let bit = binStr[i];
+            let intervalAssigned = (dir === 'LTR') ? i : (11 - i);
+            
+            let badge = document.createElement('div');
+            badge.className = `flex flex-col items-center justify-center p-1 px-1.5 rounded min-w-[28px] ${bit==='1' ? 'bg-cyan-900/60 border border-cyan-500/50' : 'bg-slate-800 border border-slate-700'}`;
+            
+            let topLabel = document.createElement('span');
+            topLabel.className = bit==='1' ? 'text-cyan-400 font-bold' : 'text-slate-500';
+            topLabel.innerText = bit;
+            
+            let botLabel = document.createElement('span');
+            botLabel.className = 'text-[9px] text-slate-400 mt-1';
+            botLabel.innerText = INTERVAL_NAMES[intervalAssigned];
+
+            badge.appendChild(topLabel);
+            badge.appendChild(botLabel);
+            binEl.appendChild(badge);
         }
 
-        function rowIndexToPixel(rowIndex) {
-            return rowIndex * 40;
+        // Identify Scale
+        let match = SCALE_DICT.find(s => JSON.stringify(s.intervals) === JSON.stringify(activeIntervals));
+        
+        if (match) {
+            titleEl.innerText = match.name;
+            infoEl.innerText = match.info;
+            titleEl.className = "text-xl lg:text-2xl font-bold text-cyan-400";
+        } else {
+            titleEl.innerText = `Custom Scale (${activeIntervals.length} Notes)`;
+            infoEl.innerText = "This 12-bit vector does not match the standard Western Diatonic modes, standard symmetrical scales, or the 72 Carnatic Melakartas.";
+            titleEl.className = "text-xl lg:text-2xl font-bold text-slate-300";
         }
+    }
 
-        // ─── Event Listeners ─────────────────────────────────────
-        melaSelect.addEventListener('change', () => {
-            const n = parseInt(melaSelect.value, 10);
-            if (n >= 1 && n <= 72) {
-                hexInput.value = MELA[n].hex.replace('0x', '');
-                parseHexAndBuildScale();
+    function renderFretboard(activeIntervals) {
+        let container = document.getElementById('fretboardContainer');
+        let rootNotePitch = parseInt(document.getElementById('rootSelect').value);
+        let displayMode = document.getElementById('displaySelect').value;
+        
+        container.innerHTML = '';
+        let fretboard = document.createElement('div');
+        fretboard.className = 'fretboard';
+
+        // Draw fret markers behind strings
+        const singleMarkers = [3, 5, 7, 9, 15, 17, 19, 21];
+        const doubleMarkers = [12, 24];
+        
+        let markerWrapper = document.createElement('div');
+        markerWrapper.className = "absolute inset-0 flex pointer-events-none pl-[20px]"; // account for fretboard padding
+        
+        for (let i = 0; i <= NUM_FRETS; i++) {
+            let flex = i === 0 ? "0.3" : "1";
+            let markerCol = document.createElement('div');
+            markerCol.style.flex = flex;
+            markerCol.style.position = "relative";
+            
+            if (singleMarkers.includes(i)) {
+                let m = document.createElement('div');
+                m.className = "fret-marker";
+                markerCol.appendChild(m);
             }
-        });
-
-        hexInput.addEventListener('input', () => {
-            // Clear melakarta selector if user types a custom hex
-            const bits = parseInt(hexInput.value.trim(), 16) & 0xFFF;
-            const matched = BITS_TO_MELA.get(bits);
-            melaSelect.value = matched || '';
-            parseHexAndBuildScale();
-        });
-
-        rootSelect.addEventListener('change', parseHexAndBuildScale);
-
-        showNotesBtn.addEventListener('click', () => {
-            displayMode = 'NOTES';
-            updateDisplayButtons();
-            renderFretboard();
-        });
-
-        showIntervalsBtn.addEventListener('click', () => {
-            displayMode = 'INTERVALS';
-            updateDisplayButtons();
-            renderFretboard();
-        });
-
-        function updateDisplayButtons() {
-            const base = 'px-3 py-1 text-sm rounded-md font-medium transition-colors';
-            if (displayMode === 'NOTES') {
-                showNotesBtn.className = `${base} bg-blue-600 text-white`;
-                showIntervalsBtn.className = `${base} text-slate-400 hover:text-white`;
-            } else {
-                showNotesBtn.className = `${base} text-slate-400 hover:text-white`;
-                showIntervalsBtn.className = `${base} bg-blue-600 text-white`;
+            if (doubleMarkers.includes(i)) {
+                let m1 = document.createElement('div');
+                m1.className = "fret-marker double";
+                let m2 = document.createElement('div');
+                m2.className = "fret-marker double-2";
+                markerCol.appendChild(m1);
+                markerCol.appendChild(m2);
             }
+            markerWrapper.appendChild(markerCol);
+        }
+        fretboard.appendChild(markerWrapper);
+
+        // Draw Strings
+        STRING_ROOTS.forEach((openPitch, stringIndex) => {
+            let row = document.createElement('div');
+            row.className = 'string-row';
+            
+            // Physical string thickness mapping (thickest at bottom)
+            let stringThickness = 1 + ((5 - stringIndex) * 0.5); 
+            let stringLine = document.createElement('div');
+            stringLine.className = 'string-line';
+            stringLine.style.height = `${stringThickness}px`;
+            stringLine.style.top = `calc(50% - ${stringThickness/2}px)`;
+            row.appendChild(stringLine);
+
+            for (let fret = 0; fret <= NUM_FRETS; fret++) {
+                let fretCell = document.createElement('div');
+                fretCell.className = `fret ${fret === 0 ? 'nut' : ''}`;
+
+                let currentNotePitch = (openPitch + fret) % 12;
+                let intervalFromRoot = (currentNotePitch - rootNotePitch + 12) % 12;
+
+                if (activeIntervals.includes(intervalFromRoot)) {
+                    let orb = document.createElement('div');
+                    let colorClass = determineHarmonicColor(intervalFromRoot);
+                    orb.className = `note-orb ${colorClass}`;
+                    
+                    if (displayMode === 'NOTE') {
+                        orb.innerText = CHROMATIC[currentNotePitch];
+                    } else {
+                        orb.innerText = INTERVAL_NAMES[intervalFromRoot];
+                    }
+                    
+                    fretCell.appendChild(orb);
+                }
+
+                row.appendChild(fretCell);
+            }
+            fretboard.appendChild(row);
+        });
+
+        // Add fret numbers at the bottom
+        let numRow = document.createElement('div');
+        numRow.className = 'fret-number-row';
+        for (let i = 0; i <= NUM_FRETS; i++) {
+            let num = document.createElement('div');
+            num.className = `fret-number ${i===0 ? 'nut-num' : ''}`;
+            num.innerText = i;
+            numRow.appendChild(num);
         }
 
-        // ─── Initialize ──────────────────────────────────────────
-        window.onload = () => {
-            renderFretNumbers();
-            // Default to mela 15 (Mayamalavagowla, 0xCB9) — the paper's canonical default
-            melaSelect.value = '15';
-            hexInput.value = MELA[15].hex.replace('0x', '');
-            parseHexAndBuildScale();
-        };
-    </script>
+        container.appendChild(fretboard);
+        container.appendChild(numRow);
+    }
+
+    function update() {
+        let { binStr, activeIntervals, dir } = getScaleData();
+        renderIntelligence(activeIntervals, binStr, dir);
+        renderFretboard(activeIntervals);
+    }
+
+    // Boot
+    buildScaleDictionary();
+    initUI();
+    update();
+
+</script>
 </body>
 </html>
