@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="vellum">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Melagabra · An interactive companion to the seventy-two Melakartas</title>
+  <meta name="description" content="An interactive companion to the algebraic structure of the seventy-two Carnatic Melakartas: Klein-four orbits, the Hamming-distance-2 graph, the Gray-code Hamiltonian, the unique Z-relation, and the extremal-nibble vivadi predicate." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=Spectral:ital,wght@0,300..700;1,300..700&family=Tiro+Devanagari+Sanskrit:ital@0;1&family=JetBrains+Mono:ital,wght@0,300..600;1,300..600&display=swap"
+    rel="stylesheet"
+  />
+
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            vellum:  '#F4ECD8',
+            ink:     '#1B1A17',
+            kumkum:  '#8B2E1F',
+            indigo:  '#3A5A6C',
+            brass:   '#C8A24A',
+            'vellum-2': '#EBE0C2',
+            'ink-2':    '#3A3833',
+            'ink-soft': '#5A554B'
+          },
+          fontFamily: {
+            display: ['Newsreader', 'ui-serif', 'Georgia', 'serif'],
+            body:    ['Spectral', 'Newsreader', 'ui-serif', 'serif'],
+            sans:    ['Spectral', 'Newsreader', 'ui-serif', 'serif'],
+            mono:    ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+            deva:    ['"Tiro Devanagari Sanskrit"', 'serif']
+          }
+        }
+      }
+    };
+  </script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body class="bg-vellum text-ink font-body antialiased">
+
+<!-- Marginal plate index — fades in after the hero hold (4 s) -->
+<aside id="plate-index" class="fixed right-0 top-0 h-full w-12 z-30 flex flex-col items-center justify-center gap-3 text-[11px] tracking-[0.18em] uppercase text-ink-soft opacity-0 pointer-events-none transition-opacity duration-700 select-none" aria-label="Plate index">
+  <a href="#/atlas"      data-plate="0"   class="plate-link" title="The Atlas">0</a>
+  <a href="#/encoding"   data-plate="I"   class="plate-link" title="The Encoding">I</a>
+  <a href="#/orbits"     data-plate="II"  class="plate-link" title="The Klein Quilt">II</a>
+  <a href="#/hamming"    data-plate="III" class="plate-link" title="The Distance Field">III</a>
+  <a href="#/graycode"   data-plate="IV"  class="plate-link" title="The Gray Walk">IV</a>
+  <a href="#/zrelation"  data-plate="V"   class="plate-link" title="The Z-Triangle">V</a>
+  <a href="#/vivadi"     data-plate="VI"  class="plate-link" title="The Vivadi Lab">VI</a>
+  <a href="#/cross"      data-plate="VII" class="plate-link" title="Cross-currents">VII</a>
+  <a href="#/empirical"  data-plate="VIII" class="plate-link" title="Empirical">VIII</a>
+  <a href="#/colophon"   data-plate="IX"  class="plate-link" title="Colophon">IX</a>
+  <span class="block w-3 h-px bg-ink-soft my-1 opacity-50"></span>
+  <a href="#/perform"    data-plate="∞"   class="plate-link" title="The Console">∞</a>
+  <span class="block w-3 h-px bg-ink-soft my-1 opacity-50"></span>
+  <a href="guitar.html"   class="plate-link" title="Guitar Fretboard">Gtr</a>
+</aside>
+
+<!-- Marginal title — appears once nav has surfaced -->
+<header id="masthead" class="fixed left-0 top-0 px-6 py-4 z-30 opacity-0 pointer-events-none transition-opacity duration-700">
+  <a href="#/atlas" class="font-display text-[15px] tracking-[0.32em] uppercase text-ink hover:text-kumkum transition-colors">
+    Melagabra
+  </a>
+  <span class="ml-3 text-[10px] tracking-[0.2em] uppercase text-ink-soft hidden sm:inline">
+    The seventy-two Melakartas, set as a manuscript
+  </span>
+</header>
+
+<!-- Main stage -->
+<main id="stage" class="relative min-h-screen">
+
+  <!-- Plate 0 · The Atlas (lobby) -->
+  <section data-plate="atlas" class="plate" aria-label="Plate 0 · The Atlas">
+    <div id="atlas-stage" class="relative w-full h-screen overflow-hidden">
+      <svg id="atlas-svg" class="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+      <div id="atlas-caption" class="absolute inset-x-0 bottom-[14vh] text-center pointer-events-none">
+        <p class="font-display italic text-ink text-xl md:text-2xl tracking-tight typeset-line">
+          <span class="line">Seventy-two parents.</span>
+          <span class="line">Eighteen orbits.</span>
+          <span class="line">One Z-relation.</span>
+          <span class="line">One walk.</span>
+        </p>
+      </div>
+      <div id="atlas-active" class="absolute inset-x-0 top-[6vh] text-center text-ink opacity-0 transition-opacity duration-700">
+        <div class="text-[10px] tracking-[0.32em] uppercase text-ink-soft">active mela</div>
+        <div class="font-display text-2xl md:text-3xl mt-1" data-bind="mela.name">·</div>
+        <div class="font-mono text-[11px] mt-1 text-ink-soft">
+          <span data-bind="mela.numeral">·</span> &nbsp;·&nbsp; <span data-bind="mela.hex">·</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Plate I · The Encoding -->
+  <section data-plate="encoding" class="plate hidden" aria-label="Plate I · The Encoding">
+    <div class="plate-frame">
+      <div class="plate-heading">
+        <div class="folio">§ I</div>
+        <h1 class="font-display text-3xl md:text-5xl">The Encoding</h1>
+        <p class="font-body italic text-ink-soft mt-2 max-w-2xl">
+          A seven-tone Melakarta is a popcount-seven vector in <span class="kt">F<sub>2</sub><sup>12</sup></span>, set under a mirrored-endianness convention.  Sa and Pa are fixed; the three regions — lower (R-G), madhyama, upper (D-N) — partition the remaining ten bits.
+        </p>
+      </div>
+      <div id="encoding-body" class="plate-body"></div>
+    </div>
+  </section>
+
+  <!-- Plate II · The Klein Quilt -->
+  <section data-plate="orbits" class="plate hidden" aria-label="Plate II · The Klein Quilt">
+    <div class="plate-frame">
+      <div class="plate-heading">
+        <div class="folio">§ II</div>
+        <h1 class="font-display text-3xl md:text-5xl">The Klein Quilt</h1>
+        <p class="font-body italic text-ink-soft mt-2 max-w-2xl">
+          Two involutions — madhyama swap (<span class="kt">K<sub>1</sub></span>) and Sa-Pa-fixing antipodal complement (<span class="kt">K<sub>2</sub></span>) — generate a Klein four-group acting freely on the seventy-two set, partitioning it into eighteen orbits of size four.
+        </p>
+      </div>
+      <div id="orbits-body" class="plate-body"></div>
+    </div>
+  </section>
+
+  <!-- Plate III · The Distance Field -->
+  <section data-plate="hamming" class="plate hidden" aria-label="Plate III · The Distance Field">
+    <div class="plate-frame">
+      <div class="plate-heading">
+        <div class="folio">§ III</div>
+        <h1 class="font-display text-3xl md:text-5xl">The Distance Field</h1>
+        <p class="font-body italic text-ink-soft mt-2 max-w-2xl">
+          The graph whose edges connect pairs at Hamming distance two is nine-regular, with three hundred and twenty-four edges.  Its full pairwise distance distribution is <span class="kt">(324, 936, 936, 324, 36)</span>; the thirty-six pairs at distance ten are exactly the antipodal pairs.
+        </p>
+      </div>
+      <div id="hamming-body" class="plate-body"></div>
+    </div>
+  </section>
+
+  <!-- Plate IV · The Gray Walk -->
+  <section data-plate="graycode" class="plate hidden" aria-label="Plate IV · The Gray Walk">
+    <div class="plate-frame">
+      <div class="plate-heading">
+        <div class="folio">§ IV</div>
+        <h1 class="font-display text-3xl md:text-5xl">The Gray Walk</h1>
+        <p class="font-body italic text-ink-soft mt-2 max-w-2xl">
+          Warnsdorff's heuristic, starting at Kanakāṅgī, traces a Hamiltonian path through all seventy-two melas with every consecutive pair at distance two.  It crosses the madhyama partition exactly once — at step thirty-five, from Dhīraśaṅkarābharaṇaṃ to Mēcakalyāṇī — which is the minimum.
+        </p>
+      </div>
+      <div id="graycode-body" class="plate-body"></div>
+    </div>
+  </section>
+
+  <!-- Plate V · The Z-Triangle -->
+  <section data-plate="zrelation" class="plate hidden" aria-label="Plate V · The Z-Triangle">
+    <div class="plate-frame">
+      <div class="plate-heading">
+        <div class="folio">§ V</div>
+        <h1 class="font-display text-3xl md:text-5xl">The Z-Triangle</h1>
+        <p class="font-body italic text-ink-soft mt-2 max-w-2xl">
+          Among the seventy-two, exactly one Forte Z-pair is realised: 7-Z18 and 7-Z38, carried by Navanītaṃ, Divyamaṇi and Dhavaḷāmbarī.  All three share the interval-class vector <span class="kt">⟨4, 3, 4, 4, 4, 2⟩</span>; the system permits exactly this.
+        </p>
+      </div>
+      <div id="zrelation-body" class="plate-body"></div>
+    </div>
+  </section>
+
+  <!-- Plate VI · The Vivadi Lab -->
+  <section data-plate="vivadi" class="plate hidden" aria-label="Plate VI · The Vivadi Lab">
+    <div class="plate-frame">
+      <div class="plate-heading">
+        <div class="folio">§ VI</div>
+        <h1 class="font-display text-3xl md:text-5xl">The Vivadi Lab</h1>
+        <p class="font-body italic text-ink-soft mt-2 max-w-2xl">
+          A Melakarta is extremally vivadi iff its R-G or D-N nibble lies at the boundary of its four-bit window — the patterns <span class="kt">0x3</span> and <span class="kt">0xC</span>.  Exactly forty Melakartas satisfy this; the fourteen that do not, but would under a naïve predicate, form a coherent middle-chromatic exception set.
+        </p>
+      </div>
+      <div id="vivadi-body" class="plate-body"></div>
+    </div>
+  </section>
+
+  <!-- Plate VII · Cross-currents -->
+  <section data-plate="cross" class="plate hidden" aria-label="Plate VII · Cross-currents">
+    <div class="plate-frame">
+      <div class="plate-heading">
+        <div class="folio">§ VII</div>
+        <h1 class="font-display text-3xl md:text-5xl">Cross-currents</h1>
+        <p class="font-body italic text-ink-soft mt-2 max-w-2xl">
+          The Western diatonic family realises the Forte class 7-35.  Hungarian minor, Siṃhēndramadhyamaṃ, and Double harmonic major, Māyāmāḷavagauḷa, both sit in 7-22 and are <span class="kt">T<sub>7</sub></span>-related: the latter is the parent, the former its fourth mode.
+        </p>
+      </div>
+      <div id="cross-body" class="plate-body"></div>
+    </div>
+  </section>
+
+  <!-- Plate VIII · Empirical -->
+  <section data-plate="empirical" class="plate hidden" aria-label="Plate VIII · Empirical">
+    <div class="plate-frame">
+      <div class="plate-heading">
+        <div class="folio">§ VIII</div>
+        <h1 class="font-display text-3xl md:text-5xl">Empirical</h1>
+        <p class="font-body italic text-ink-soft mt-2 max-w-2xl">
+          Forte-class population is a robust positive predictor of per-Melakarta janya count: Spearman <span class="kt">ρ = +0.46</span>, <span class="kt">p &lt; 10<sup>−4</sup></span> on a sample of nine hundred and two janyas.  This page reads only the fifteen counts hardcoded in Appendix C; the remainder, where unknown to this codebase, are marked accordingly.
+        </p>
+      </div>
+      <div id="empirical-body" class="plate-body"></div>
+    </div>
+  </section>
+
+  <!-- Plate IX · Colophon -->
+  <section data-plate="colophon" class="plate hidden" aria-label="Plate IX · Colophon">
+    <div class="plate-frame">
+      <div class="plate-heading">
+        <div class="folio">§ IX</div>
+        <h1 class="font-display text-3xl md:text-5xl">Colophon</h1>
+        <p class="font-body italic text-ink-soft mt-2 max-w-2xl">
+          References, the kaṭapayādi key, methods, and a citation.
+        </p>
+      </div>
+      <div id="colophon-body" class="plate-body"></div>
+    </div>
+  </section>
+
+  <!-- Plate ∞ · The Console (Perform) -->
+  <section data-plate="perform" class="plate hidden" aria-label="Plate ∞ · The Console" data-fullscreen="true">
+    <div id="perform-stage" class="absolute inset-0 bg-ink text-vellum"></div>
+  </section>
+
+</main>
+
+<!-- Lower-right marginal pivot: explore <-> perform -->
+<button id="mode-pivot" class="fixed bottom-5 right-5 z-30 w-10 h-10 rounded-full border border-ink-soft text-ink-soft hover:text-kumkum hover:border-kumkum bg-vellum/70 backdrop-blur-sm flex items-center justify-center transition-colors opacity-0 pointer-events-none" title="Switch mode (~)" aria-label="Switch between Explore and Perform">
+  <i class="ph ph-circles-three text-lg"></i>
+</button>
+
+<!-- "Tap to begin" overlay — appears the first time audio (or MIDI) is requested -->
+<div id="audio-gate" class="fixed inset-0 z-50 hidden bg-ink/80 backdrop-blur-sm flex items-center justify-center" role="dialog" aria-label="Audio + MIDI">
+  <div class="flex flex-col items-center gap-3">
+    <button id="audio-gate-button" class="px-8 py-5 border border-vellum/50 text-vellum font-display text-lg italic tracking-wide hover:bg-vellum/10 transition-colors">
+      Tap to begin the tambura.
+    </button>
+    <div id="audio-gate-sub" class="text-vellum/60 font-mono text-[11px] tracking-[0.18em] uppercase">
+      audio context · web midi (sysex)
+    </div>
+  </div>
+</div>
+
+<!-- Self-test failure banner (CLAUDE.md tripwire) -->
+<div id="selftest-banner" class="fixed top-0 inset-x-0 z-50 hidden bg-kumkum text-vellum text-sm py-2 px-4 font-mono">
+  <span id="selftest-message">Gray path check failed — paper and code disagree.</span>
+</div>
+
+<noscript>
+  <div class="m-12 p-6 border border-ink/30 font-body italic">
+    Melagabra is an interactive manuscript and requires JavaScript.  Please enable scripts to read it.
+  </div>
+</noscript>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
