@@ -250,6 +250,103 @@
         .custom-select:focus { outline: none; border-color: hsl(172, 60%, 54%); }
         .string-label { font-size: 10px; color: #64748b; text-align: center; margin-bottom: 2px; }
 
+        /* ─── Scale Chooser Modal ─── */
+        .scale-tab-btn {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #94a3b8;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s;
+            cursor: pointer;
+            background: none;
+            border-top: none;
+            border-left: none;
+            border-right: none;
+        }
+        .scale-tab-btn:hover { color: #e2e8f0; }
+        .scale-tab-btn.active {
+            color: hsl(172, 70%, 60%);
+            border-bottom-color: hsl(172, 60%, 54%);
+        }
+        .chakra-header {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748b;
+            padding: 8px 4px 4px;
+        }
+        .mela-cell {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+            border-radius: 8px;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .mela-cell:hover {
+            background: rgba(51, 65, 85, 0.5);
+            border-color: rgba(71, 85, 105, 0.8);
+        }
+        .mela-cell.hidden { display: none; }
+        .nibble-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: ui-monospace, monospace;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        }
+        .nb-brass { background: radial-gradient(circle at 30% 30%, hsl(42,85%,55%), hsl(38,75%,38%)); }
+        .nb-verm { background: radial-gradient(circle at 30% 30%, hsl(12,75%,55%), hsl(8,68%,38%)); }
+        .nb-teal { background: radial-gradient(circle at 30% 30%, hsl(172,55%,50%), hsl(168,48%,35%)); }
+        .vivadi-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .vd-avivadi { background: hsl(42,80%,55%); box-shadow: 0 0 4px hsla(42,80%,55%,0.4); }
+        .vd-extremal { background: hsl(12,75%,55%); box-shadow: 0 0 4px hsla(12,75%,55%,0.4); }
+        .vd-exception { background: hsl(275,40%,55%); box-shadow: 0 0 4px hsla(275,40%,55%,0.4); }
+        .scale-cat-header {
+            font-size: 12px;
+            font-weight: 600;
+            color: hsl(172, 60%, 55%);
+            border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+            padding-bottom: 4px;
+            margin-top: 12px;
+            margin-bottom: 8px;
+        }
+        .scale-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .scale-row:hover { background: rgba(51, 65, 85, 0.4); }
+        .scale-row.hidden { display: none; }
+        .search-input {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 14px;
+            width: 100%;
+        }
+        .search-input:focus { outline: none; border-color: hsl(172, 60%, 54%); }
+
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -277,7 +374,10 @@
                 </div>
                 <div>
                     <label class="block text-xs text-slate-400 mb-1">Hex Vector</label>
-                    <input type="text" id="hexInput" value="D55" class="bg-slate-900 border border-slate-600 rounded w-24 px-2 py-1 text-sm font-mono focus:outline-none focus:border-cyan-500 uppercase" maxlength="3">
+                    <div class="flex items-center gap-1">
+                        <input type="text" id="hexInput" value="D55" class="bg-slate-900 border border-slate-600 rounded w-24 px-2 py-1 text-sm font-mono focus:outline-none focus:border-cyan-500 uppercase" maxlength="3">
+                        <button id="scaleChooserBtn" class="px-2 py-1 text-slate-400 hover:text-white border border-slate-600 rounded hover:border-slate-500 transition-colors" title="Choose scale">☰</button>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-xs text-slate-400 mb-1">Vector Direction</label>
@@ -409,6 +509,27 @@
         </div>
     </div>
 
+    <!-- Scale Chooser Modal -->
+    <div id="scaleModal" class="fixed inset-0 z-50 hidden modal-overlay bg-black/60 backdrop-blur-sm flex items-center justify-center">
+        <div class="modal-panel bg-slate-800 rounded-xl border border-slate-700 shadow-2xl max-w-3xl w-full mx-4 overflow-hidden flex flex-col" style="max-height: 85vh;">
+            <div class="flex items-center justify-between p-4 border-b border-slate-700">
+                <h2 class="text-lg font-bold text-white">Choose Scale</h2>
+                <button id="scaleModalClose" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <div class="p-4 border-b border-slate-700 space-y-3">
+                <input type="text" id="scaleSearch" class="search-input" placeholder="Search by name or hex...">
+                <div class="flex gap-2">
+                    <button class="scale-tab-btn active" data-tab="melakartas">72 Melakartas</button>
+                    <button class="scale-tab-btn" data-tab="known">Known Scales</button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4">
+                <div id="tabMelakartas" class="space-y-3"></div>
+                <div id="tabKnown" class="space-y-2 hidden"></div>
+            </div>
+        </div>
+    </div>
+
 <script>
     // Musical Constants
     const CHROMATIC = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -418,6 +539,7 @@
     // Mutable tuning state (loaded from localStorage or defaults)
     let STRING_ROOTS = [1, 9, 5, 1, 9, 5];
     let CURRENT_TUNING_NAME = "Major 3rds (FAC#FAC#)";
+    let MELAKARTA_DATA = null;
 
     const KNOWN_TUNINGS = [
         { name: "Major 3rds (FAC#FAC#)", roots: [1, 9, 5, 1, 9, 5] },
@@ -658,6 +780,237 @@
         update();
     }
 
+    // ─── Scale Chooser ───────────────────────────────────────
+    function intervalsToHex(intervals) {
+        let num = 0;
+        intervals.forEach(iv => num |= 1 << (11 - iv));
+        return num.toString(16).toUpperCase().padStart(3, '0');
+    }
+
+    function buildMelakartaData() {
+        const purvanga = [[1, 2], [1, 3], [1, 4], [2, 3], [2, 4], [3, 4]];
+        const uttaranga = [[8, 9], [8, 10], [8, 11], [9, 10], [9, 11], [10, 11]];
+        const RG_NIBBLES = [0xC, 0xA, 0x9, 0x6, 0x5, 0x3];
+        const DN_NIBBLES = [0x3, 0x5, 0x9, 0x6, 0xA, 0xC];
+
+        let data = [];
+        let melaIndex = 0;
+        for (let c = 1; c <= 12; c++) {
+            for (let p = 1; p <= 6; p++) {
+                let n = 6 * (c - 1) + p;
+                let m = c <= 6 ? 5 : 6;
+                let rg = purvanga[(c - 1) % 6];
+                let dn = uttaranga[p - 1];
+                let intervals = [0, rg[0], rg[1], m, 7, dn[0], dn[1]];
+                let hex = intervalsToHex(intervals);
+
+                let rgNib = RG_NIBBLES[(c - 1) % 6];
+                let dnNib = DN_NIBBLES[p - 1];
+                let vivadi;
+                if (rgNib === 0x3 || rgNib === 0xC || dnNib === 0x3 || dnNib === 0xC) {
+                    vivadi = "extremal";
+                } else if (rgNib === 0x6 || dnNib === 0x6) {
+                    vivadi = "exception";
+                } else {
+                    vivadi = "avivadi";
+                }
+
+                let western = "";
+                let ivsStr = JSON.stringify(intervals);
+                for (let s of SCALE_DICT) {
+                    if (s.intervals && JSON.stringify(s.intervals) === ivsStr) {
+                        let name = s.name;
+                        let idx = name.indexOf(" / Melakarta");
+                        if (idx > 0) name = name.substring(0, idx);
+                        western = name;
+                        break;
+                    }
+                }
+
+                data.push({
+                    n, name: MELAKARTA_NAMES[melaIndex], intervals, hex, western, vivadi, chakra: c, position: p
+                });
+                melaIndex++;
+            }
+        }
+        return data;
+    }
+
+    function openScaleModal() {
+        let modal = document.getElementById('scaleModal');
+        if (!MELAKARTA_DATA) {
+            MELAKARTA_DATA = buildMelakartaData();
+        }
+        buildMelakartaGrid();
+        buildKnownScalesList();
+        document.getElementById('scaleSearch').value = '';
+        filterScales('');
+        switchScaleTab('melakartas');
+        modal.classList.remove('hidden');
+        void modal.offsetWidth;
+        modal.classList.add('open');
+        document.getElementById('scaleSearch').focus();
+    }
+
+    function closeScaleModal() {
+        let modal = document.getElementById('scaleModal');
+        modal.classList.remove('open');
+        setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    function switchScaleTab(tab) {
+        document.querySelectorAll('.scale-tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+        document.getElementById('tabMelakartas').classList.toggle('hidden', tab !== 'melakartas');
+        document.getElementById('tabKnown').classList.toggle('hidden', tab !== 'known');
+    }
+
+    function buildMelakartaGrid() {
+        let container = document.getElementById('tabMelakartas');
+        container.innerHTML = '';
+        for (let c = 1; c <= 12; c++) {
+            let chakraMelas = MELAKARTA_DATA.filter(m => m.chakra === c);
+            let section = document.createElement('div');
+
+            let header = document.createElement('div');
+            header.className = 'chakra-header';
+            let ma = c <= 6 ? 'M₁' : 'M₂';
+            header.textContent = `Chakra ${c} · ${ma}`;
+            section.appendChild(header);
+
+            let grid = document.createElement('div');
+            grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
+
+            chakraMelas.forEach(m => {
+                let cell = document.createElement('div');
+                cell.className = 'mela-cell';
+                cell.dataset.name = m.name.toLowerCase();
+                cell.dataset.hex = m.hex.toLowerCase();
+
+                let hexHTML = `
+                    <span class="nibble-badge nb-brass">${m.hex[0]}</span>
+                    <span class="nibble-badge nb-verm">${m.hex[1]}</span>
+                    <span class="nibble-badge nb-teal">${m.hex[2]}</span>
+                `;
+                let vivadiDot = `<span class="vivadi-dot vd-${m.vivadi}" title="${m.vivadi}"></span>`;
+                let westernHTML = m.western ? `<div class="text-[10px] text-slate-400 italic mt-0.5 truncate">${m.western}</div>` : '';
+
+                cell.innerHTML = `
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-slate-300 text-sm font-mono">${m.n}</span>
+                        <div class="flex items-center gap-1.5">${hexHTML}${vivadiDot}</div>
+                    </div>
+                    <div class="text-white font-semibold text-sm leading-tight truncate">${m.name}</div>
+                    ${westernHTML}
+                `;
+                cell.addEventListener('click', () => selectScale(m.hex));
+                grid.appendChild(cell);
+            });
+
+            section.appendChild(grid);
+            container.appendChild(section);
+        }
+    }
+
+    function buildKnownScalesList() {
+        let container = document.getElementById('tabKnown');
+        container.innerHTML = '';
+        let westernScales = SCALE_DICT.filter(s => !s.name.includes('Melakarta'));
+
+        const categories = {
+            'Diatonic (7-35)': ['Major', 'Dorian', 'Phrygian', 'Lydian', 'Mixolydian', 'Minor', 'Locrian', 'Aeolian', 'Ionian'],
+            'Pentatonic & Blues': ['Pentatonic', 'Blues'],
+            'Symmetrical': ['Whole Tone', 'Diminished', 'Augmented'],
+            'Jazz & Exotic': ['Harmonic Minor', 'Melodic Minor', 'Altered', 'Phrygian Dominant', 'Lydian Dominant', 'Neapolitan'],
+            'World': ['Hirajoshi', 'In Sen'],
+            'Synthetic': ['Prometheus', 'Enigmatic']
+        };
+
+        let categorized = {};
+        let uncategorized = [];
+        westernScales.forEach(s => {
+            let cat = null;
+            for (let [catName, keywords] of Object.entries(categories)) {
+                if (keywords.some(kw => s.name.toLowerCase().includes(kw.toLowerCase()))) {
+                    cat = catName;
+                    break;
+                }
+            }
+            if (cat) {
+                if (!categorized[cat]) categorized[cat] = [];
+                categorized[cat].push(s);
+            } else {
+                uncategorized.push(s);
+            }
+        });
+
+        function renderCategory(name, scales) {
+            let header = document.createElement('div');
+            header.className = 'scale-cat-header';
+            header.textContent = name;
+            container.appendChild(header);
+            scales.forEach(s => {
+                let hex = intervalsToHex(s.intervals);
+                let row = document.createElement('div');
+                row.className = 'scale-row';
+                row.dataset.name = s.name.toLowerCase();
+                row.dataset.hex = hex.toLowerCase();
+                row.innerHTML = `
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <span class="nibble-badge nb-brass">${hex[0]}</span>
+                        <span class="nibble-badge nb-verm">${hex[1]}</span>
+                        <span class="nibble-badge nb-teal">${hex[2]}</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-white font-medium text-sm truncate">${s.name}</div>
+                        <div class="text-slate-400 text-xs truncate">${s.info}</div>
+                    </div>
+                `;
+                row.addEventListener('click', () => selectScale(hex));
+                container.appendChild(row);
+            });
+        }
+
+        for (let [catName, scales] of Object.entries(categorized)) {
+            renderCategory(catName, scales);
+        }
+        if (uncategorized.length > 0) {
+            renderCategory('Other', uncategorized);
+        }
+    }
+
+    function filterScales(query) {
+        let q = query.trim().toLowerCase();
+        document.querySelectorAll('#tabMelakartas .mela-cell').forEach(cell => {
+            let match = !q || cell.dataset.name.includes(q) || cell.dataset.hex.includes(q);
+            cell.classList.toggle('hidden', !match);
+        });
+        document.querySelectorAll('#tabMelakartas > div').forEach(section => {
+            let visible = section.querySelectorAll('.mela-cell:not(.hidden)').length > 0;
+            section.style.display = visible ? '' : 'none';
+        });
+        document.querySelectorAll('#tabKnown .scale-row').forEach(row => {
+            let match = !q || row.dataset.name.includes(q) || row.dataset.hex.includes(q);
+            row.classList.toggle('hidden', !match);
+        });
+        document.querySelectorAll('#tabKnown .scale-cat-header').forEach(hdr => {
+            let next = hdr.nextElementSibling;
+            let visible = false;
+            while (next && !next.classList.contains('scale-cat-header')) {
+                if (!next.classList.contains('hidden')) visible = true;
+                next = next.nextElementSibling;
+            }
+            hdr.style.display = visible ? '' : 'none';
+        });
+    }
+
+    function selectScale(hex) {
+        document.getElementById('hexInput').value = hex;
+        closeScaleModal();
+        update();
+    }
+
     // UI Initialization
     function initUI() {
         const rootSelect = document.getElementById('rootSelect');
@@ -679,6 +1032,16 @@
         document.getElementById('tuningApply').addEventListener('click', applyTuning);
         document.getElementById('tuningModal').addEventListener('click', (e) => {
             if (e.target.id === 'tuningModal') closeTuningModal();
+        });
+
+        document.getElementById('scaleChooserBtn').addEventListener('click', openScaleModal);
+        document.getElementById('scaleModalClose').addEventListener('click', closeScaleModal);
+        document.getElementById('scaleModal').addEventListener('click', (e) => {
+            if (e.target.id === 'scaleModal') closeScaleModal();
+        });
+        document.getElementById('scaleSearch').addEventListener('input', (e) => filterScales(e.target.value));
+        document.querySelectorAll('.scale-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchScaleTab(btn.dataset.tab));
         });
     }
 
@@ -916,6 +1279,7 @@
     // Boot
     loadTuning();
     buildScaleDictionary();
+    MELAKARTA_DATA = buildMelakartaData();
     initUI();
     updateTuningSubtitle();
     update();
