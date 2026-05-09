@@ -208,6 +208,48 @@
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; }
         ::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
+        /* ─── Tuning Modal ─── */
+        .modal-overlay {
+            opacity: 0;
+            transition: opacity 0.2s ease-out;
+        }
+        .modal-overlay.open { opacity: 1; }
+        .modal-panel {
+            transform: scale(0.95);
+            transition: transform 0.2s ease-out;
+        }
+        .modal-overlay.open .modal-panel {
+            transform: scale(1);
+        }
+        .preset-btn {
+            text-align: left;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #e2e8f0;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .preset-btn:hover { border-color: #475569; background: #273548; }
+        .preset-btn.active {
+            border-color: hsl(172, 60%, 54%);
+            background: hsla(172, 60%, 54%, 0.1);
+            color: hsl(172, 70%, 60%);
+        }
+        .custom-select {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            border-radius: 4px;
+            padding: 4px 6px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .custom-select:focus { outline: none; border-color: hsl(172, 60%, 54%); }
+        .string-label { font-size: 10px; color: #64748b; text-align: center; margin-bottom: 2px; }
+
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -223,7 +265,7 @@
         <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-slate-700 pb-4">
             <div>
                 <h1 class="text-3xl font-bold text-white tracking-tight">Symmetrical Fretboard</h1>
-                <p class="text-slate-400 text-sm mt-1">Strict Major 3rds Tuning (F - A - C# - F - A - C#)</p>
+                <p class="text-slate-400 text-sm mt-1" id="tuningSubtitle">Loading tuning...</p>
             </div>
             
             <div class="flex flex-wrap gap-3 items-center bg-slate-800 p-3 rounded-lg shadow-inner border border-slate-700">
@@ -250,6 +292,12 @@
                         <option value="INTERVAL">Intervals</option>
                         <option value="NOTE">Notes</option>
                     </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Tuning</label>
+                    <button id="tuningBtn" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm text-left w-48 focus:outline-none focus:border-cyan-500 hover:border-slate-500 transition-colors truncate">
+                        Select Tuning
+                    </button>
                 </div>
             </div>
         </div>
@@ -338,15 +386,63 @@
 
     </div>
 
+    <!-- Tuning Modal -->
+    <div id="tuningModal" class="fixed inset-0 z-50 hidden modal-overlay bg-black/60 backdrop-blur-sm flex items-center justify-center">
+        <div class="modal-panel bg-slate-800 rounded-xl border border-slate-700 shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
+            <div class="flex items-center justify-between p-4 border-b border-slate-700">
+                <h2 class="text-lg font-bold text-white">Select Tuning</h2>
+                <button id="tuningModalClose" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <div class="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                <p class="text-xs text-slate-500 uppercase tracking-wider">Presets</p>
+                <div id="tuningPresets" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+
+                <div id="tuningCustom" class="hidden space-y-3 pt-2 border-t border-slate-700">
+                    <p class="text-xs text-slate-500 uppercase tracking-wider">Custom (string 1 = highest, on the right)</p>
+                    <div class="flex gap-2 justify-center" id="customStringSelects"></div>
+                </div>
+
+                <button id="tuningApply" class="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded font-medium transition-colors">
+                    Apply Tuning
+                </button>
+            </div>
+        </div>
+    </div>
+
 <script>
     // Musical Constants
     const CHROMATIC = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
     const INTERVAL_NAMES = ["R", "b2", "2", "b3", "3", "4", "b5", "5", "b6", "6", "b7", "7"];
     const NUM_FRETS = 24;
 
-    // Strict Major 3rds Tuning (1st to 6th String -> High to Low Pitch on Screen)
-    // C# - A - F - C# - A - F
-    const STRING_ROOTS = [1, 9, 5, 1, 9, 5]; 
+    // Mutable tuning state (loaded from localStorage or defaults)
+    let STRING_ROOTS = [1, 9, 5, 1, 9, 5];
+    let CURRENT_TUNING_NAME = "Major 3rds (FAC#FAC#)";
+
+    const KNOWN_TUNINGS = [
+        { name: "Major 3rds (FAC#FAC#)", roots: [1, 9, 5, 1, 9, 5] },
+        { name: "Standard (EADGBE)",      roots: [4, 11, 7, 2, 9, 4] },
+        { name: "Drop D (DADGBE)",        roots: [4, 11, 7, 2, 9, 1] },
+        { name: "Double Drop D",          roots: [1, 11, 7, 2, 9, 1] },
+        { name: "Drop C (CGCFAD)",        roots: [0, 7, 3, 10, 6, 1] },
+        { name: "Open G (DGDGBD)",        roots: [2, 11, 7, 2, 7, 1] },
+        { name: "Open D (DADF#AD)",       roots: [2, 9, 6, 1, 6, 1] },
+        { name: "Open E (EBEG#BE)",       roots: [4, 11, 7, 4, 8, 4] },
+        { name: "Open A (EAC#EAE)",       roots: [4, 9, 4, 1, 9, 4] },
+        { name: "Open C (CGCGCE)",        roots: [0, 7, 0, 7, 0, 4] },
+        { name: "Open Em (EBEGBE)",       roots: [4, 11, 7, 4, 7, 4] },
+        { name: "DADGAD",                 roots: [2, 9, 7, 2, 9, 1] },
+        { name: "DADGBE (Modal D)",       roots: [2, 9, 7, 2, 9, 4] },
+        { name: "DGDGBE",                 roots: [2, 11, 7, 2, 9, 4] },
+        { name: "All Fourths (EADGCF)",   roots: [5, 0, 7, 2, 9, 4] },
+        { name: "All Fifths (CGDAEB)",    roots: [4, 11, 6, 1, 8, 3] },
+        { name: "NST / Fripp (CGDAEG)",   roots: [4, 9, 3, 10, 5, 0] },
+        { name: "Baritone A",             roots: [4, 11, 7, 2, 9, 8] },
+        { name: "Spanish / Blues",        roots: [1, 11, 7, 2, 7, 1] },
+        { name: "Nick Drake (CGCFCE)",    roots: [0, 7, 0, 5, 0, 4] },
+        { name: "Custom",                 roots: null }
+    ];
+    const TUNING_STORAGE_KEY = "melagabra_guitar_tuning";
 
     // Scale Dictionary (Will be populated with Western + 72 Melakartas)
     let SCALE_DICT = [];
@@ -427,6 +523,141 @@
         }
     }
 
+    // ─── Tuning Persistence ──────────────────────────────────
+    function loadTuning() {
+        try {
+            let stored = localStorage.getItem(TUNING_STORAGE_KEY);
+            if (stored) {
+                let parsed = JSON.parse(stored);
+                if (Array.isArray(parsed.roots) && parsed.roots.length === 6) {
+                    STRING_ROOTS = parsed.roots;
+                    CURRENT_TUNING_NAME = parsed.name || "Custom";
+                    return;
+                }
+            }
+        } catch (e) { /* fall through to default */ }
+        STRING_ROOTS = [1, 9, 5, 1, 9, 5];
+        CURRENT_TUNING_NAME = "Major 3rds (FAC#FAC#)";
+    }
+
+    function saveTuning(name, roots) {
+        try {
+            localStorage.setItem(TUNING_STORAGE_KEY, JSON.stringify({ name, roots }));
+        } catch (e) { /* storage may be unavailable */ }
+    }
+
+    function tuningToLabel(name, roots) {
+        let notes = roots.map(r => CHROMATIC[r]).join(" - ");
+        return `${name}  (${notes})`;
+    }
+
+    function updateTuningSubtitle() {
+        let sub = document.getElementById('tuningSubtitle');
+        let btn = document.getElementById('tuningBtn');
+        let label = tuningToLabel(CURRENT_TUNING_NAME, STRING_ROOTS);
+        if (sub) sub.textContent = label;
+        if (btn) btn.textContent = CURRENT_TUNING_NAME;
+    }
+
+    // ─── Tuning Modal ────────────────────────────────────────
+    let modalSelectedTuning = null;
+
+    function openTuningModal() {
+        let modal = document.getElementById('tuningModal');
+        let presetsEl = document.getElementById('tuningPresets');
+        let customEl = document.getElementById('tuningCustom');
+        let customSelectsEl = document.getElementById('customStringSelects');
+        presetsEl.innerHTML = '';
+        customSelectsEl.innerHTML = '';
+        customEl.classList.add('hidden');
+        modalSelectedTuning = null;
+
+        KNOWN_TUNINGS.forEach((t, idx) => {
+            let btn = document.createElement('button');
+            btn.className = 'preset-btn';
+            btn.textContent = t.name;
+            if (t.name === CURRENT_TUNING_NAME) {
+                btn.classList.add('active');
+                modalSelectedTuning = t;
+            }
+            btn.addEventListener('click', () => {
+                presetsEl.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                modalSelectedTuning = t;
+                if (t.name === "Custom") {
+                    customEl.classList.remove('hidden');
+                    populateCustomSelects();
+                } else {
+                    customEl.classList.add('hidden');
+                }
+            });
+            presetsEl.appendChild(btn);
+        });
+
+        // Build custom selects (string 1 highest on the RIGHT)
+        for (let s = 5; s >= 0; s--) {
+            let wrap = document.createElement('div');
+            wrap.className = 'flex flex-col items-center';
+            let lbl = document.createElement('div');
+            lbl.className = 'string-label';
+            lbl.textContent = `Str${s + 1}`;
+            let sel = document.createElement('select');
+            sel.className = 'custom-select';
+            sel.dataset.stringIndex = s;
+            CHROMATIC.forEach((note, pc) => {
+                let opt = document.createElement('option');
+                opt.value = pc;
+                opt.textContent = note;
+                if (pc === STRING_ROOTS[s]) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            wrap.appendChild(lbl);
+            wrap.appendChild(sel);
+            customSelectsEl.appendChild(wrap);
+        }
+
+        modal.classList.remove('hidden');
+        // Force reflow for transition
+        void modal.offsetWidth;
+        modal.classList.add('open');
+    }
+
+    function closeTuningModal() {
+        let modal = document.getElementById('tuningModal');
+        modal.classList.remove('open');
+        setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    function populateCustomSelects() {
+        let selects = document.querySelectorAll('#customStringSelects .custom-select');
+        selects.forEach(sel => {
+            let s = parseInt(sel.dataset.stringIndex, 10);
+            sel.value = STRING_ROOTS[s];
+        });
+    }
+
+    function applyTuning() {
+        if (!modalSelectedTuning) return;
+        let name = modalSelectedTuning.name;
+        let roots;
+        if (name === "Custom") {
+            roots = [];
+            let selects = document.querySelectorAll('#customStringSelects .custom-select');
+            for (let s = 0; s < 6; s++) {
+                let sel = document.querySelector(`#customStringSelects .custom-select[data-string-index="${s}"]`);
+                roots[s] = sel ? parseInt(sel.value, 10) : STRING_ROOTS[s];
+            }
+        } else {
+            roots = modalSelectedTuning.roots.slice();
+        }
+        STRING_ROOTS = roots;
+        CURRENT_TUNING_NAME = name;
+        saveTuning(name, roots);
+        updateTuningSubtitle();
+        closeTuningModal();
+        update();
+    }
+
     // UI Initialization
     function initUI() {
         const rootSelect = document.getElementById('rootSelect');
@@ -442,6 +673,13 @@
         document.getElementById('rootSelect').addEventListener('change', update);
         document.getElementById('bitDirSelect').addEventListener('change', update);
         document.getElementById('displaySelect').addEventListener('change', update);
+
+        document.getElementById('tuningBtn').addEventListener('click', openTuningModal);
+        document.getElementById('tuningModalClose').addEventListener('click', closeTuningModal);
+        document.getElementById('tuningApply').addEventListener('click', applyTuning);
+        document.getElementById('tuningModal').addEventListener('click', (e) => {
+            if (e.target.id === 'tuningModal') closeTuningModal();
+        });
     }
 
     function getScaleData() {
@@ -676,8 +914,10 @@
     }
 
     // Boot
+    loadTuning();
     buildScaleDictionary();
     initUI();
+    updateTuningSubtitle();
     update();
 
 </script>
