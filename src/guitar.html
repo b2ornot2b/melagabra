@@ -105,17 +105,28 @@
             transform: translate(-50%, -50%) scale(1.2);
         }
 
-        /* Core Chord Tones */
-        .color-root { background: radial-gradient(circle at 30% 30%, #ef4444, #991b1b); text-shadow: 0 1px 2px #000; }
-        .color-3rd  { background: radial-gradient(circle at 30% 30%, #facc15, #a16207); text-shadow: 0 1px 2px #000; color: #fff;}
-        .color-5th  { background: radial-gradient(circle at 30% 30%, #f97316, #9a3412); text-shadow: 0 1px 2px #000; }
-        .color-7th  { background: radial-gradient(circle at 30% 30%, #a855f7, #581c87); text-shadow: 0 1px 2px #000; }
-        
-        /* Deep Thought Tensions */
-        .color-tension-sweet   { background: radial-gradient(circle at 30% 30%, #22d3ee, #0891b2); text-shadow: 0 1px 2px #000; } /* 2nds/9ths, 6ths/13ths */
-        .color-tension-sus     { background: radial-gradient(circle at 30% 30%, #3b82f6, #1d4ed8); text-shadow: 0 1px 2px #000; } /* 4ths/11ths */
-        .color-tension-tritone { background: radial-gradient(circle at 30% 30%, #ec4899, #be185d); text-shadow: 0 1px 2px #000; } /* b5 / #4 */
-        .color-tension-dark    { background: radial-gradient(circle at 30% 30%, #84cc16, #4d7c0f); text-shadow: 0 1px 2px #000; } /* b2/b9, b6/b13 */
+        /* ─── Structural pillars (Brass/Gold family) ─── */
+        .color-root { background: radial-gradient(circle at 30% 30%, hsl(42,92%,62%), hsl(38,85%,38%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+        .color-p5   { background: radial-gradient(circle at 30% 30%, hsl(40,78%,52%), hsl(36,72%,34%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+        /* ─── Chord quality (Warm Vermillion family) ───
+           Major variants are brighter; minor variants are deeper. */
+        .color-maj3 { background: radial-gradient(circle at 30% 30%, hsl(14,88%,64%), hsl(10,82%,42%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+        .color-min3 { background: radial-gradient(circle at 30% 30%, hsl(6,80%,58%), hsl(2,72%,38%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+        .color-maj7 { background: radial-gradient(circle at 30% 30%, hsl(355,75%,62%), hsl(350,65%,42%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+        .color-min7 { background: radial-gradient(circle at 30% 30%, hsl(345,60%,56%), hsl(340,52%,38%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+        /* ─── Extensions (Cool Teal family) ───
+           4th is grayed-out slate-teal to signal suspension ambiguity. */
+        .color-2    { background: radial-gradient(circle at 30% 30%, hsl(172,70%,58%), hsl(168,60%,38%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+        .color-6    { background: radial-gradient(circle at 30% 30%, hsl(178,55%,52%), hsl(174,48%,36%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+        .color-4    { background: radial-gradient(circle at 30% 30%, hsl(190,35%,52%), hsl(195,30%,36%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+        /* ─── Altered tensions (Muted Mauve/Plum family) ───
+           b5 is deepest plum to signal maximum symmetrical tension. */
+        .color-b2   { background: radial-gradient(circle at 30% 30%, hsl(270,45%,62%), hsl(268,38%,42%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+        .color-b6   { background: radial-gradient(circle at 30% 30%, hsl(275,38%,55%), hsl(273,32%,38%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+        .color-b5   { background: radial-gradient(circle at 30% 30%, hsl(280,50%,48%), hsl(278,45%,32%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
 
         .fret-number-row {
             display: flex;
@@ -208,46 +219,56 @@
             <div class="lg:col-span-2 bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-lg">
                 <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Improvisation & Harmonic Function Legend</h2>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                    <!-- Core Tones -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                    <!-- Structural -->
                     <div class="space-y-3">
-                        <h3 class="text-xs font-bold text-slate-500 border-b border-slate-700 pb-1">Core Tones</h3>
+                        <h3 class="text-xs font-bold border-b pb-1" style="color: hsl(42,85%,58%); border-color: hsla(42,85%,58%,0.3);">Structural</h3>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></span> 
-                            <div><strong class="text-slate-200">Roots (R):</strong> The absolute home base. Complete resolution.</div>
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(42,92%,58%); box-shadow: 0 0 8px hsla(42,90%,55%,0.5);"></span> 
+                            <div><strong class="text-slate-200">Root (R):</strong> The absolute home base. Complete resolution.</div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]"></span> 
-                            <div><strong class="text-slate-200">Perfect 5ths (5):</strong> Power and stability. The strongest support for the root.</div>
-                        </div>
-                        <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]"></span> 
-                            <div><strong class="text-slate-200">3rds (b3, 3):</strong> The character notes. They tell your ear if the mood is Major or Minor. Great phrase enders.</div>
-                        </div>
-                        <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"></span> 
-                            <div><strong class="text-slate-200">7ths (b7, 7):</strong> Strong pull and gravity leading back to the root, or providing a sophisticated jazzy/bluesy feel.</div>
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(40,78%,48%); box-shadow: 0 0 8px hsla(40,75%,45%,0.5);"></span> 
+                            <div><strong class="text-slate-200">Perfect 5th:</strong> Power and stability. The strongest support for the root.</div>
                         </div>
                     </div>
 
-                    <!-- Tension Types -->
+                    <!-- Chord Quality -->
                     <div class="space-y-3">
-                        <h3 class="text-xs font-bold text-slate-500 border-b border-slate-700 pb-1">Tension Types</h3>
+                        <h3 class="text-xs font-bold border-b pb-1" style="color: hsl(12,85%,58%); border-color: hsla(12,85%,58%,0.3);">Chord Quality</h3>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]"></span> 
-                            <div><strong class="text-slate-200">Sweet Tensions (2, 6):</strong> Airy, floating extensions. Beautiful to hold and rest on for a dreamy, unresolved sound.</div>
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(14,88%,60%); box-shadow: 0 0 8px hsla(14,85%,58%,0.5);"></span> 
+                            <div><strong class="text-slate-200">Major 3rd / Maj7:</strong> Bright, open character. Defines major harmony.</div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></span> 
-                            <div><strong class="text-slate-200">Suspended (4):</strong> Structural tension that yearns to resolve downward into the 3rd.</div>
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(6,80%,54%); box-shadow: 0 0 8px hsla(6,75%,52%,0.5);"></span> 
+                            <div><strong class="text-slate-200">Minor 3rd / Min7:</strong> Deeper, introspective. Defines minor harmony.</div>
+                        </div>
+                    </div>
+
+                    <!-- Extensions -->
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold border-b pb-1" style="color: hsl(175,55%,52%); border-color: hsla(175,55%,52%,0.3);">Extensions</h3>
+                        <div class="flex items-start gap-3">
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(172,70%,56%); box-shadow: 0 0 8px hsla(172,65%,54%,0.5);"></span> 
+                            <div><strong class="text-slate-200">2nd / 6th:</strong> Airy, floating color tones. Dreamy and unresolved.</div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.5)]"></span> 
-                            <div><strong class="text-slate-200">Tritone (b5):</strong> The sharpest symmetrical tension. Piercing, bluesy, demands collapse or expansion.</div>
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(190,35%,50%); box-shadow: 0 0 8px hsla(190,30%,48%,0.5);"></span> 
+                            <div><strong class="text-slate-200">4th (sus):</strong> Structural ambiguity. Yearns to resolve to the 3rd.</div>
+                        </div>
+                    </div>
+
+                    <!-- Altered -->
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold border-b pb-1" style="color: hsl(275,40%,55%); border-color: hsla(275,40%,55%,0.3);">Altered</h3>
+                        <div class="flex items-start gap-3">
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(270,45%,58%); box-shadow: 0 0 8px hsla(270,40%,55%,0.5);"></span> 
+                            <div><strong class="text-slate-200">b2 / b6:</strong> Acidic friction. Half-step above chord tones. Exotic suspense.</div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-lime-500 shadow-[0_0_8px_rgba(132,204,22,0.5)]"></span> 
-                            <div><strong class="text-slate-200">Dark Gravity (b2, b6):</strong> Acidic friction. These sit a half-step above chord tones, possessing a violent downward pull. Use for tragic, exotic suspense.</div>
+                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(280,50%,46%); box-shadow: 0 0 8px hsla(280,45%,44%,0.5);"></span> 
+                            <div><strong class="text-slate-200">Tritone (b5):</strong> Maximum symmetrical tension. Piercing, demands resolution.</div>
                         </div>
                     </div>
                 </div>
@@ -391,20 +412,24 @@
     }
 
     // Deep Harmonic Function Color Mapping
+    // Four hue families, chromatically connected:
+    //   Structural (Brass) | Quality (Vermillion) | Extensions (Teal) | Altered (Mauve)
     function determineHarmonicColor(interval) {
-        // Core Tones
-        if (interval === 0) return 'color-root';
-        if (interval === 7) return 'color-5th';
-        if (interval === 3 || interval === 4) return 'color-3rd';
-        if (interval === 10 || interval === 11) return 'color-7th';
-        
-        // Deep Thought Tensions
-        if (interval === 2 || interval === 9) return 'color-tension-sweet'; // 2nds, 6ths (Airy, extensions)
-        if (interval === 5) return 'color-tension-sus'; // 4ths (Suspended)
-        if (interval === 6) return 'color-tension-tritone'; // b5 / #4 (Piercing, bluesy)
-        if (interval === 1 || interval === 8) return 'color-tension-dark'; // b2, b6 (Heavy downward gravity)
-        
-        return 'color-tension-sweet'; // Fallback
+        switch (interval) {
+            case 0:  return 'color-root';
+            case 7:  return 'color-p5';
+            case 4:  return 'color-maj3';
+            case 3:  return 'color-min3';
+            case 11: return 'color-maj7';
+            case 10: return 'color-min7';
+            case 2:  return 'color-2';
+            case 9:  return 'color-6';
+            case 5:  return 'color-4';
+            case 1:  return 'color-b2';
+            case 8:  return 'color-b6';
+            case 6:  return 'color-b5';
+            default: return 'color-2';
+        }
     }
 
     function renderIntelligence(activeIntervals, binStr, dir) {
