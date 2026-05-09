@@ -1,0 +1,526 @@
+/*
+<metadata description="Melagabra — 72 Carnatic Melakartas as a tactile yantra. Five octave bands of three nibble rows; touch a lit cell to play, press K-anchors to apply Klein-four transforms. Pairs with the Melagabra web app over SysEx (manufacturer 0x7D, sub-ID 'M')."
+          details="Cols 0-11: 12 PC zones, 3 LED-cols per nibble bit. Col 12=K1 (madhyama swap), col 13=K2 (antipodal), col 14=K3 + oct+ + oct- + drone toggle. MPE out per finger; rough vivadi pcs strobe vermillion; persistent state via local config."
+          target="Lightpad"
+          tags="MIDI;Carnatic;Algebra"
+          canEmbedModes="false">
+  <variables/>
+</metadata>
+*/
+
+/*
+    melagabra.littlefoot
+    ────────────────────
+    Lightpad Block program for the Melagabra Carnatic-Melakarta interactive
+    companion. Receives the active 12-bit raga vector + vivadi rough-mask
+    over SysEx (manufacturer 0x7D, sub-ID 'M' = 0x4D) from the Web app,
+    displays it on the 15×15 LED grid, and sends MPE touch + custom-SysEx
+    button events back. The last-loaded raga is persisted in local config
+    so the Block displays it standalone on next boot.
+
+    Wire protocol summary (full spec in /CLAUDE.md):
+      F0 7D 4D 01 <vec_msb> <vec_lsb> <flags> <seq> F7   SET_RAGA      (web→block)
+      F0 7D 4D 02 <msb> <lsb> <seq> F7                   SET_ROUGH_MASK (web→block)
+      F0 7D 4D 04 <shift+2> <seq> F7                     SET_OCTAVE    (web→block)
+      F0 7D 4D 11 <btn> <seq> F7                         BUTTON        (block→web)
+      F0 7D 4D 12 <maj> <min> F7                         HELLO         (block→web)
+      F0 7D 4D 0F <ctr> F7   /  10 <ctr> F7              HEARTBEAT     (round-trip)
+
+    Layout: 15 rows = 5 octave bands × 3 nibble rows.
+            Cols 0-11 = 12 PC zones (3 LED cols per bit group).
+            Cols 12-14 = K1, K2, K3 anchors + octave +/- + drone toggle.
+*/
+
+/* ───── Persistent state (slots 0..3 in local-config flash) ───── */
+
+const int SLOT_RAGA   = 0;
+const int SLOT_ROUGH  = 1;
+const int SLOT_OCT    = 2;
+const int SLOT_MAGIC  = 3;
+const int MAGIC_VALUE = 0xCB9015;   /* 0xCB9 = mela 15 (Mayamalavagowla) */
+
+/* ───── Frame state ───── */
+
+int  ragaVector;       /* 12-bit popcount-7 vector */
+int  vivadiFlags;      /* bit 0 = isVivadi */
+int  roughMask;        /* 12-bit pc mask of rough pitch classes */
+int  octaveShift;      /* -2..+2 */
+int  dirty;            /* flag: rebuild gridCache on next repaint */
+int  frameCount;
+int  lastFlashWriteFrame;
+
+int  gridCache[225];   /* 15 × 15 base colours */
+
+/* MPE channel allocator (channels 1..15 = MIDI 2..16) */
+int  activeChannel[16];
+int  channelHead;
+
+/* Per-finger touch state — Lightpad supports up to 8 simultaneous touches */
+int  touchKindIdx[8];
+int  touchChannel[8];
+int  touchOriginCol[8];
+int  touchOriginRow[8];
+
+/* Touch kinds */
+const int TOUCH_NONE   = 0;
+const int TOUCH_PC     = 1;
+const int TOUCH_K1     = 2;
+const int TOUCH_K2     = 3;
+const int TOUCH_K3     = 4;
+const int TOUCH_OCT_UP = 5;
+const int TOUCH_OCT_DN = 6;
+const int TOUCH_DRONE  = 7;
+
+/* SysEx parser state */
+int  sysexBuf[64];
+int  sysexLen;
+int  inSysEx;
+
+/* ───── Colours (24-bit, alpha auto = 0xFF) ───── */
+
+const int COL_OFF       = 0x000000;
+const int COL_LIT       = 0xC8C8C8;   /* white-ish */
+const int COL_SA_PA     = 0xC8A24A;   /* brass */
+const int COL_VIVADI_HI = 0x8B2E1F;   /* kumkum, on-strobe */
+const int COL_VIVADI_LO = 0x2C0E08;   /* kumkum, off-strobe */
+const int COL_K_BAND    = 0x3A5A6C;   /* indigo */
+const int COL_OCT_UP    = 0xC8A24A;
+const int COL_OCT_DN    = 0xC8A24A;
+const int COL_DRONE     = 0xC8C8C8;
+
+/* ───── initialise() ───── */
+
+void initialise()
+{
+    int magic;
+    int packed;
+
+    magic = getLocalConfig (SLOT_MAGIC);
+    if (magic == MAGIC_VALUE)
+    {
+        ragaVector  = getLocalConfig (SLOT_RAGA) & 0xFFF;
+        packed      = getLocalConfig (SLOT_ROUGH);
+        vivadiFlags = (packed >> 12) & 0xF;
+        roughMask   = packed & 0xFFF;
+        octaveShift = getLocalConfig (SLOT_OCT) - 2;
+        if (octaveShift < -2) octaveShift = -2;
+        if (octaveShift >  2) octaveShift =  2;
+    }
+    else
+    {
+        /* First boot — default to mela 15 (Mayamalavagowla, 0xCB9) */
+        ragaVector  = 0xCB9;
+        vivadiFlags = 0;
+        roughMask   = 0;
+        octaveShift = 0;
+        saveStateToFlash();
+    }
+
+    dirty               = true;
+    frameCount          = 0;
+    lastFlashWriteFrame = 0;
+    channelHead         = 0;
+    inSysEx             = 0;
+    sysexLen            = 0;
+
+    /* Greet the host so it can confirm a Block is alive */
+    sendHello();
+}
+
+/* ───── Flash persistence (rate-limited at write-site) ───── */
+
+void saveStateToFlash()
+{
+    /* Caller is responsible for rate-limiting; see scheduleFlashWrite() */
+    setLocalConfig (SLOT_RAGA,  ragaVector & 0xFFF);
+    setLocalConfig (SLOT_ROUGH, ((vivadiFlags & 0xF) << 12) | (roughMask & 0xFFF));
+    setLocalConfig (SLOT_OCT,   octaveShift + 2);
+    setLocalConfig (SLOT_MAGIC, MAGIC_VALUE);
+}
+
+void scheduleFlashWrite()
+{
+    /* Rate-limit flash writes to ≤ 5 Hz (≈ every 5 frames at 25 fps). */
+    if (frameCount - lastFlashWriteFrame >= 6)
+    {
+        saveStateToFlash();
+        lastFlashWriteFrame = frameCount;
+    }
+}
+
+/* ───── Layout helpers ───── */
+
+const int ROWS_PER_BAND = 3;
+
+int rowToOctaveDelta (int row)
+{
+    /* band 0 (rows 0..2)   = +2 oct
+       band 1 (rows 3..5)   = +1
+       band 2 (rows 6..8)   =  0  (anchor)
+       band 3 (rows 9..11)  = -1
+       band 4 (rows 12..14) = -2 */
+    return 2 - (row / ROWS_PER_BAND);
+}
+
+int rowToNibbleIndex (int row)
+{
+    /* 0 = upper bits 11..8, 1 = middle 7..4, 2 = lower 3..0 */
+    return row % ROWS_PER_BAND;
+}
+
+int getNibbleBits (int nibbleIndex)
+{
+    if (nibbleIndex == 0) return (ragaVector >> 8) & 0xF;
+    if (nibbleIndex == 1) return (ragaVector >> 4) & 0xF;
+    return ragaVector & 0xF;
+}
+
+int nibbleBitToPC (int nibble, int bitGroup)
+{
+    /* Within a nibble, bitGroup 0 = high bit (closest to start of region).
+       Maps to mirrored-endianness pitch classes. */
+    if (nibble == 0) return     bitGroup;       /* nib 0 (bits 11..8) → pc 0,1,2,3 */
+    if (nibble == 1) return 4 + bitGroup;       /* nib 1 (bits  7..4) → pc 4,5,6,7 */
+    return            11 - bitGroup;             /* nib 2 (bits  3..0) → pc 11,10,9,8 */
+}
+
+int colToBitGroup (int col)
+{
+    return col / 3;          /* 3 LED-cols per bit group */
+}
+
+/* ───── Build the static grid colour cache ───── */
+
+void buildGridCache()
+{
+    int row;
+    int col;
+    int nibble;
+    int bits;
+    int bitGroup;
+    int bitMask;
+    int isLit;
+    int pc;
+    int colour;
+
+    for (row = 0; row < 15; ++row)
+    {
+        nibble = rowToNibbleIndex (row);
+        bits   = getNibbleBits (nibble);
+
+        for (col = 0; col < 15; ++col)
+        {
+            colour = COL_OFF;
+
+            if (col < 12)
+            {
+                bitGroup = colToBitGroup (col);
+                bitMask  = 1 << (3 - bitGroup);   /* high bit first */
+                isLit    = (bits & bitMask) != 0;
+                pc       = nibbleBitToPC (nibble, bitGroup);
+
+                if (isLit)
+                {
+                    if (pc == 0 || pc == 7)
+                        colour = COL_SA_PA;
+                    else if ((roughMask & (1 << pc)) != 0)
+                        colour = COL_VIVADI_HI;     /* strobed in repaint */
+                    else
+                        colour = COL_LIT;
+                }
+            }
+            else if (col == 12)        { colour = COL_K_BAND;   }
+            else if (col == 13)        { colour = COL_K_BAND;   }
+            else                       /* col == 14 */
+            {
+                if      (row <  7)     colour = COL_K_BAND;
+                else if (row < 10)     colour = COL_OCT_UP;
+                else if (row < 13)     colour = COL_OCT_DN;
+                else                   colour = COL_DRONE;
+            }
+
+            gridCache[row * 15 + col] = colour;
+        }
+    }
+}
+
+/* ───── repaint() — runs ~25–30 fps; must be cheap ───── */
+
+void repaint()
+{
+    int i;
+    int row;
+    int col;
+    int colour;
+    int strobeOn;
+
+    if (dirty) { buildGridCache(); dirty = false; }
+    ++frameCount;
+
+    /* ~3 Hz rough-pc strobe (toggles every 4 frames at 25 fps) */
+    strobeOn = ((frameCount >> 2) & 1);
+
+    for (i = 0; i < 225; ++i)
+    {
+        row    = i / 15;
+        col    = i % 15;
+        colour = gridCache[i];
+
+        /* Apply strobe to vivadi cells only */
+        if (col < 12 && colour == COL_VIVADI_HI && ! strobeOn)
+            colour = COL_VIVADI_LO;
+
+        fillPixel (colour, col, row);
+    }
+}
+
+/* ───── Octave shift control ───── */
+
+void adjustOctave (int delta)
+{
+    octaveShift = octaveShift + delta;
+    if (octaveShift < -2) octaveShift = -2;
+    if (octaveShift >  2) octaveShift =  2;
+    scheduleFlashWrite();
+    dirty = true;
+}
+
+/* ───── MPE channel allocator ───── */
+
+int allocateChannel()
+{
+    int i;
+    int ch;
+
+    for (i = 0; i < 15; ++i)
+    {
+        ch = ((channelHead + i) % 15) + 1;
+        if (activeChannel[ch] == 0)
+        {
+            activeChannel[ch] = 1;
+            channelHead = ch;
+            return ch;
+        }
+    }
+    /* Overflow: steal the oldest */
+    return ((channelHead + 1) % 15) + 1;
+}
+
+void releaseChannel (int ch)
+{
+    if (ch >= 1 && ch <= 15)
+        activeChannel[ch] = 0;
+}
+
+/* ───── Touch handlers ───── */
+
+int touchKind (int col, int row)
+{
+    if (col < 12)              return TOUCH_PC;
+    if (col == 12)             return TOUCH_K1;
+    if (col == 13)             return TOUCH_K2;
+    /* col == 14 */
+    if (row <  7)              return TOUCH_K3;
+    if (row < 10)              return TOUCH_OCT_UP;
+    if (row < 13)              return TOUCH_OCT_DN;
+    return TOUCH_DRONE;
+}
+
+int touchedMidi (int col, int row)
+{
+    int nibble = rowToNibbleIndex (row);
+    int bitGroup = colToBitGroup (col);
+    int pc = nibbleBitToPC (nibble, bitGroup);
+    int rowOctave = rowToOctaveDelta (row);
+    return 60 + pc + 12 * (rowOctave + octaveShift);
+}
+
+int pitchBendForX (float x, int col)
+{
+    /* Map ±0.5 of one zone-width into ±50 cents; assume host has PB range = 1 semitone.
+       Touch zone for `col` is centred at (col + 0.5)/15 with width ≈ 1/15. */
+    float origin = (float (col) + 0.5) / 15.0;
+    float delta  = x - origin;
+    int signed14 = int (delta * 8192.0 * 2.0);   /* ±0.5 zone-width → ±50¢ */
+    if (signed14 >  8191) signed14 =  8191;
+    if (signed14 < -8192) signed14 = -8192;
+    return signed14 + 8192;
+}
+
+void touchStart (int index, float x, float y, float z, float vx, float vy)
+{
+    int col;
+    int row;
+    int kind;
+    int ch;
+    int midi;
+    int vel;
+
+    col = int (x * 15.0);  if (col > 14) col = 14;  if (col < 0) col = 0;
+    row = int (y * 15.0);  if (row > 14) row = 14;  if (row < 0) row = 0;
+
+    kind = touchKind (col, row);
+    touchKindIdx  [index] = kind;
+    touchOriginCol[index] = col;
+    touchOriginRow[index] = row;
+
+    if (kind == TOUCH_PC)
+    {
+        ch  = allocateChannel();
+        midi = touchedMidi (col, row);
+        vel = int (z * 127.0);
+        if (vel < 1)   vel = 1;
+        if (vel > 127) vel = 127;
+
+        touchChannel[index] = ch;
+        sendNoteOn (ch, midi, vel);
+        sendChannelPressure (ch, int (z * 127.0));
+    }
+    /* K-anchor / octave / drone: nothing on press; commit on release */
+}
+
+void touchMove (int index, float x, float y, float z, float vx, float vy)
+{
+    int kind = touchKindIdx[index];
+    int ch;
+    int col;
+
+    if (kind != TOUCH_PC) return;
+
+    ch  = touchChannel[index];
+    col = touchOriginCol[index];
+
+    sendPitchWheel       (ch, pitchBendForX (x, col));
+    sendCC               (ch, 74, int (y * 127.0));
+    sendChannelPressure  (ch, int (z * 127.0));
+}
+
+void touchEnd (int index, float x, float y, float z, float vx, float vy)
+{
+    int kind = touchKindIdx[index];
+
+    if (kind == TOUCH_PC)
+    {
+        int ch = touchChannel[index];
+        int col = touchOriginCol[index];
+        int row = touchOriginRow[index];
+        int midi = touchedMidi (col, row);
+        sendNoteOff (ch, midi, 0);
+        releaseChannel (ch);
+    }
+    else if (kind == TOUCH_K1)      { sendButton (0x01); }
+    else if (kind == TOUCH_K2)      { sendButton (0x02); }
+    else if (kind == TOUCH_K3)      { sendButton (0x03); }
+    else if (kind == TOUCH_OCT_UP)  { adjustOctave ( 1); sendButton (0x04); }
+    else if (kind == TOUCH_OCT_DN)  { adjustOctave (-1); sendButton (0x05); }
+    else if (kind == TOUCH_DRONE)   { sendButton (0x06); }
+
+    touchKindIdx[index] = TOUCH_NONE;
+}
+
+/* ───── SysEx out (Block → Web) ───── */
+
+const int MFG_ID = 0x7D;
+const int SUB_ID = 0x4D;
+
+void sendButton (int buttonId)
+{
+    int msg[7];
+    msg[0] = 0xF0; msg[1] = MFG_ID; msg[2] = SUB_ID;
+    msg[3] = 0x11;          /* CMD.BUTTON */
+    msg[4] = buttonId & 0x7F;
+    msg[5] = 0;
+    msg[6] = 0xF7;
+    sendMIDISysEx (msg, 7);
+}
+
+void sendHello()
+{
+    int msg[7];
+    msg[0] = 0xF0; msg[1] = MFG_ID; msg[2] = SUB_ID;
+    msg[3] = 0x12;          /* CMD.HELLO */
+    msg[4] = 1;             /* firmware major */
+    msg[5] = 0;             /* firmware minor */
+    msg[6] = 0xF7;
+    sendMIDISysEx (msg, 7);
+}
+
+void sendHeartbeatAck (int counter)
+{
+    int msg[6];
+    msg[0] = 0xF0; msg[1] = MFG_ID; msg[2] = SUB_ID;
+    msg[3] = 0x10;          /* CMD.HEARTBEAT_ACK */
+    msg[4] = counter & 0x7F;
+    msg[5] = 0xF7;
+    sendMIDISysEx (msg, 6);
+}
+
+/* ───── SysEx in (Web → Block), via handleMIDI byte stream ───── */
+
+void acceptSysExByte (int b)
+{
+    if (b == 0xF0) { inSysEx = 1; sysexLen = 0; }
+    if (! inSysEx) return;
+    if (sysexLen < 64) sysexBuf[sysexLen++] = b;
+    if (b == 0xF7)
+    {
+        parseSysEx();
+        inSysEx = 0;
+    }
+}
+
+void parseSysEx()
+{
+    int cmd;
+    int msb;
+    int lsb;
+
+    if (sysexLen < 5)               return;
+    if (sysexBuf[1] != MFG_ID)      return;
+    if (sysexBuf[2] != SUB_ID)      return;
+
+    cmd = sysexBuf[3];
+
+    if (cmd == 0x01)                /* SET_RAGA */
+    {
+        if (sysexLen < 9) return;
+        msb = sysexBuf[4]; lsb = sysexBuf[5];
+        ragaVector  = ((msb & 0x3F) << 6) | (lsb & 0x3F);
+        vivadiFlags = sysexBuf[6] & 0x01;
+        dirty = true;
+        scheduleFlashWrite();
+    }
+    else if (cmd == 0x02)           /* SET_ROUGH_MASK */
+    {
+        if (sysexLen < 8) return;
+        msb = sysexBuf[4]; lsb = sysexBuf[5];
+        roughMask = ((msb & 0x3F) << 6) | (lsb & 0x3F);
+        dirty = true;
+        scheduleFlashWrite();
+    }
+    else if (cmd == 0x04)           /* SET_OCTAVE */
+    {
+        if (sysexLen < 7) return;
+        octaveShift = (sysexBuf[4] & 0x7F) - 2;
+        if (octaveShift < -2) octaveShift = -2;
+        if (octaveShift >  2) octaveShift =  2;
+        scheduleFlashWrite();
+        dirty = true;
+    }
+    else if (cmd == 0x0F)           /* HEARTBEAT_REQ */
+    {
+        if (sysexLen < 6) return;
+        sendHeartbeatAck (sysexBuf[4]);
+    }
+    /* SET_MELA_INFO (0x03) and SET_FALLBACK (0x05) are accepted by the web
+       but ignored here — they are cosmetic / host-side. */
+}
+
+void handleMIDI (int byte0, int byte1, int byte2)
+{
+    /* Lightpad delivers SysEx as zero-padded triplets through handleMIDI;
+       we collect bytes until we see F7. */
+    acceptSysExByte (byte0);
+    acceptSysExByte (byte1);
+    acceptSysExByte (byte2);
+}
