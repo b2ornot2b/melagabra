@@ -128,6 +128,62 @@
         .color-b6   { background: radial-gradient(circle at 30% 30%, hsl(275,38%,55%), hsl(273,32%,38%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
         .color-b5   { background: radial-gradient(circle at 30% 30%, hsl(280,50%,48%), hsl(278,45%,32%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
 
+        /* ─── 3-Row Binary Display (nibbles) ─── */
+        .bin-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .hex-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            flex-shrink: 0;
+            box-shadow: 0 0 8px rgba(0,0,0,0.4), inset 0 0 4px rgba(255,255,255,0.3);
+        }
+        .hex-top { background: radial-gradient(circle at 30% 30%, hsl(42,90%,58%), hsl(38,82%,36%)); }
+        .hex-mid { background: radial-gradient(circle at 30% 30%, hsl(12,80%,56%),  hsl(8,72%,38%)); }
+        .hex-bot { background: radial-gradient(circle at 30% 30%, hsl(172,60%,54%), hsl(168,52%,36%)); }
+
+        .bit-badge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 4px;
+            border-radius: 4px;
+            min-width: 26px;
+            border: 1px solid;
+        }
+        .bit-top-0 { border-color: hsla(42, 85%, 58%, 0.15); }
+        .bit-top-1 { border-color: hsla(42, 85%, 58%, 0.35); background: hsla(42, 85%, 58%, 0.08); }
+        .bit-mid-0 { border-color: hsla(12, 80%, 56%, 0.15); }
+        .bit-mid-1 { border-color: hsla(12, 80%, 56%, 0.35); background: hsla(12, 80%, 56%, 0.08); }
+        .bit-bot-0 { border-color: hsla(172, 60%, 54%, 0.15); }
+        .bit-bot-1 { border-color: hsla(172, 60%, 54%, 0.35); background: hsla(172, 60%, 54%, 0.08); }
+
+        /* Active-bit text colors by harmonic function */
+        .txt-root   { color: hsl(42,90%,62%);  text-shadow: 0 0 6px hsla(42,90%,55%,0.4); }
+        .txt-p5     { color: hsl(40,78%,54%);  text-shadow: 0 0 6px hsla(40,75%,50%,0.4); }
+        .txt-maj3   { color: hsl(14,88%,66%);  text-shadow: 0 0 6px hsla(14,85%,60%,0.4); }
+        .txt-min3   { color: hsl(6,80%,60%);   text-shadow: 0 0 6px hsla(6,75%,55%,0.4); }
+        .txt-maj7   { color: hsl(355,75%,64%); text-shadow: 0 0 6px hsla(355,65%,58%,0.4); }
+        .txt-min7   { color: hsl(345,60%,58%); text-shadow: 0 0 6px hsla(345,52%,52%,0.4); }
+        .txt-2      { color: hsl(172,70%,60%); text-shadow: 0 0 6px hsla(172,65%,55%,0.4); }
+        .txt-6      { color: hsl(178,55%,54%); text-shadow: 0 0 6px hsla(178,48%,50%,0.4); }
+        .txt-4      { color: hsl(190,35%,54%); text-shadow: 0 0 6px hsla(190,30%,48%,0.4); }
+        .txt-b2     { color: hsl(270,45%,64%); text-shadow: 0 0 6px hsla(270,40%,58%,0.4); }
+        .txt-b6     { color: hsl(275,38%,58%); text-shadow: 0 0 6px hsla(275,32%,52%,0.4); }
+        .txt-b5     { color: hsl(280,50%,54%); text-shadow: 0 0 6px hsla(280,45%,48%,0.4); }
+        .txt-inactive { color: #64748b; }
+
         .fret-number-row {
             display: flex;
             padding-left: 20px;
@@ -210,7 +266,7 @@
                     <p id="scaleInfo" class="text-slate-300 text-sm leading-relaxed mb-4">...</p>
                 </div>
                 
-                <div class="flex gap-1 font-mono text-xs overflow-x-auto pb-1 mt-auto" id="binaryDisplay">
+                <div class="flex flex-col gap-2 font-mono text-xs pb-1 mt-auto" id="binaryDisplay">
                     <!-- Binary bits injected here -->
                 </div>
             </div>
@@ -436,28 +492,73 @@
         let titleEl = document.getElementById('scaleTitle');
         let infoEl = document.getElementById('scaleInfo');
         let binEl = document.getElementById('binaryDisplay');
-
-        // Render bits visually
         binEl.innerHTML = '';
-        for (let i = 0; i < 12; i++) {
-            let bit = binStr[i];
-            let intervalAssigned = (dir === 'LTR') ? i : (11 - i);
-            
-            let badge = document.createElement('div');
-            badge.className = `flex flex-col items-center justify-center p-1 px-1.5 rounded min-w-[28px] ${bit==='1' ? 'bg-cyan-900/60 border border-cyan-500/50' : 'bg-slate-800 border border-slate-700'}`;
-            
-            let topLabel = document.createElement('span');
-            topLabel.className = bit==='1' ? 'text-cyan-400 font-bold' : 'text-slate-500';
-            topLabel.innerText = bit;
-            
-            let botLabel = document.createElement('span');
-            botLabel.className = 'text-[9px] text-slate-400 mt-1';
-            botLabel.innerText = INTERVAL_NAMES[intervalAssigned];
 
-            badge.appendChild(topLabel);
-            badge.appendChild(botLabel);
-            binEl.appendChild(badge);
-        }
+        // 3 nibble rows, physical bit order fixed (top=11..8, mid=7..4, bot=3..0)
+        const rows = [
+            { bits: [11, 10, 9, 8], hexClass: 'hex-top', bitPrefix: 'bit-top', label: 'Sa–R₁–R₂–R₃' },
+            { bits: [7,  6,  5,  4], hexClass: 'hex-mid', bitPrefix: 'bit-mid', label: 'G₃–M₁–M₂–Pa' },
+            { bits: [3,  2,  1,  0], hexClass: 'hex-bot', bitPrefix: 'bit-bot', label: 'N₃–D₃–D₂–D₁' }
+        ];
+
+        const txtForInterval = (iv) => {
+            switch (iv) {
+                case 0:  return 'txt-root';
+                case 7:  return 'txt-p5';
+                case 4:  return 'txt-maj3';
+                case 3:  return 'txt-min3';
+                case 11: return 'txt-maj7';
+                case 10: return 'txt-min7';
+                case 2:  return 'txt-2';
+                case 9:  return 'txt-6';
+                case 5:  return 'txt-4';
+                case 1:  return 'txt-b2';
+                case 8:  return 'txt-b6';
+                case 6:  return 'txt-b5';
+                default: return 'txt-inactive';
+            }
+        };
+
+        rows.forEach(row => {
+            // Compute nibble value from physical bit string
+            let nibbleVal = 0;
+            row.bits.forEach((bitIdx, pos) => {
+                if (binStr[bitIdx] === '1') nibbleVal |= (1 << (3 - pos));
+            });
+            let hexDigit = nibbleVal.toString(16).toUpperCase();
+
+            let rowEl = document.createElement('div');
+            rowEl.className = 'bin-row';
+
+            let hexBadge = document.createElement('div');
+            hexBadge.className = `hex-badge ${row.hexClass}`;
+            hexBadge.innerText = hexDigit;
+            hexBadge.title = row.label;
+            rowEl.appendChild(hexBadge);
+
+            row.bits.forEach(bitIdx => {
+                let bit = binStr[bitIdx];
+                let intervalAssigned = (dir === 'LTR') ? bitIdx : (11 - bitIdx);
+                let isActive = bit === '1';
+
+                let badge = document.createElement('div');
+                badge.className = `bit-badge ${isActive ? row.bitPrefix + '-1' : row.bitPrefix + '-0'}`;
+
+                let topLabel = document.createElement('span');
+                topLabel.className = isActive ? `font-bold ${txtForInterval(intervalAssigned)}` : 'txt-inactive';
+                topLabel.innerText = bit;
+
+                let botLabel = document.createElement('span');
+                botLabel.className = 'text-[9px] text-slate-400 mt-0.5';
+                botLabel.innerText = INTERVAL_NAMES[intervalAssigned];
+
+                badge.appendChild(topLabel);
+                badge.appendChild(botLabel);
+                rowEl.appendChild(badge);
+            });
+
+            binEl.appendChild(rowEl);
+        });
 
         // Identify Scale
         let match = SCALE_DICT.find(s => JSON.stringify(s.intervals) === JSON.stringify(activeIntervals));
