@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Symmetrical M3 Fretboard Visualizer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- soundfont-player · loads General-MIDI samples on demand for the Audition feature.
+         Optional: the page works fine if this fails (synth+wave models still play). -->
+    <script src="https://unpkg.com/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
     <style>
         body {
             background-color: #0f172a;
@@ -60,6 +63,14 @@
             border-right: 6px solid #cbd5e1;
             flex: 0.3; /* Narrow space for open strings */
         }
+
+        /* Root-anchored 3×4 octave-block visualisation.
+           Cell-level tint marks the block this cell belongs to. Block extents
+           are computed in JS (see renderFretboard); these classes only carry
+           the alternating background. Low alpha keeps the white-15% fret
+           markers (z-index 0) visible underneath the cells (z-index 2). */
+        .fret.box-light { background-color: rgba(255, 255, 255, 0.04); }
+        .fret.box-dark  { background-color: rgba(255, 255, 255, 0.10); }
 
         .fret-marker {
             position: absolute;
@@ -355,6 +366,483 @@
         }
         .search-input:focus { outline: none; border-color: hsl(172, 60%, 54%); }
 
+        /* ─── Audition button + highlight pulses ─────────────────────────
+           "Audition" plays the current scale ascending; while a note
+           sounds, its bit-badge, legend swatch, and every matching
+           fretboard orb pulse so the eye can follow the ear. */
+        .audition-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid hsl(172, 60%, 38%);
+            background: hsla(172, 60%, 38%, 0.12);
+            color: hsl(172, 70%, 70%);
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 150ms, color 150ms, border-color 150ms, transform 150ms;
+        }
+        .audition-btn:hover:not(:disabled) {
+            background: hsla(172, 60%, 50%, 0.22);
+            color: hsl(172, 80%, 80%);
+            border-color: hsl(172, 60%, 55%);
+        }
+        .audition-btn:active:not(:disabled) { transform: translateY(1px); }
+        .audition-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .audition-btn.is-playing {
+            background: hsla(0, 65%, 45%, 0.22);
+            border-color: hsl(0, 65%, 55%);
+            color: hsl(0, 80%, 85%);
+        }
+        .audition-btn .audition-icon { font-size: 13px; line-height: 1; }
+
+        /* Pulse-on-play — universal class added/removed by the audition loop. */
+        .bit-badge { transition: transform 120ms ease-out, box-shadow 200ms, background 200ms; }
+        .legend-swatch { transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms, opacity 250ms, filter 250ms; }
+        .note-orb { transition: transform 0.12s, box-shadow 200ms; }
+
+        /* Swatch dims when none of its intervals are in the current scale —
+           the legend then reads "what's playable here" at a glance.
+           Adjacent-sibling rule fades the description in the same row. */
+        .legend-swatch.is-inactive {
+            opacity: 0.22;
+            box-shadow: none;
+            filter: grayscale(0.85);
+        }
+        .legend-swatch.is-inactive + div {
+            opacity: 0.42;
+            transition: opacity 250ms;
+        }
+        .legend-swatch.is-inactive + div strong { color: #64748b; }
+
+        .bit-badge.is-playing {
+            transform: scale(1.18);
+            box-shadow: 0 0 12px hsla(50, 100%, 70%, 0.55);
+            background: hsla(50, 90%, 60%, 0.14);
+            border-color: hsl(50, 100%, 65%);
+        }
+        .legend-swatch.is-playing {
+            transform: scale(1.5);
+            box-shadow: 0 0 14px 2px hsla(50, 100%, 75%, 0.85), inset 0 0 4px rgba(0,0,0,0.4) !important;
+        }
+        .note-orb.is-playing {
+            transform: translate(-50%, -50%) scale(1.4);
+            box-shadow:
+                0 0 20px 4px hsla(50, 100%, 75%, 0.95),
+                0 2px 6px rgba(0,0,0,0.55),
+                inset 0 0 4px rgba(255,255,255,0.6) !important;
+            z-index: 20;
+        }
+
+        /* ─── Audition settings · gear button + popover ──────────────── */
+        .audition-gear-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: transparent;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: color 150ms, border-color 150ms, background 150ms, transform 150ms;
+        }
+        .audition-gear-btn:hover {
+            color: hsl(172, 70%, 70%);
+            border-color: hsl(172, 60%, 38%);
+            background: hsla(172, 60%, 38%, 0.10);
+        }
+        .audition-gear-btn[aria-expanded="true"] {
+            color: hsl(172, 80%, 80%);
+            border-color: hsl(172, 60%, 55%);
+            background: hsla(172, 60%, 38%, 0.16);
+            transform: rotate(30deg);
+        }
+
+        .audition-settings {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            z-index: 40;
+            min-width: 280px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+            padding: 14px 14px 12px;
+            color: #cbd5e1;
+            font-size: 12px;
+        }
+        .audition-settings h3 {
+            font-size: 11px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: hsl(172, 60%, 60%);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        .audition-settings .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 6px 0;
+            border-top: 1px solid #1e293b;
+        }
+        .audition-settings .settings-row:first-of-type { border-top: none; }
+        .audition-settings label {
+            color: #cbd5e1;
+            font-weight: 500;
+            font-size: 12px;
+        }
+
+        /* Toggle pill */
+        .toggle-pill {
+            border: 1px solid #475569;
+            background: #1e293b;
+            color: #cbd5e1;
+            border-radius: 999px;
+            padding: 2px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            transition: background 150ms, color 150ms, border-color 150ms;
+        }
+        .toggle-pill[data-state="on"] {
+            background: hsla(172, 60%, 38%, 0.25);
+            border-color: hsl(172, 60%, 50%);
+            color: hsl(172, 80%, 80%);
+        }
+
+        /* Slider + readout */
+        .tempo-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 130px;
+            height: 4px;
+            background: #334155;
+            border-radius: 2px;
+            outline: none;
+        }
+        .tempo-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            background: hsl(172, 70%, 56%);
+            cursor: pointer;
+            border: 1px solid hsl(172, 60%, 30%);
+        }
+        .tempo-slider::-moz-range-thumb {
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            background: hsl(172, 70%, 56%);
+            cursor: pointer;
+            border: 1px solid hsl(172, 60%, 30%);
+        }
+        .tempo-readout {
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-size: 10px;
+            color: #94a3b8;
+            min-width: 48px;
+            text-align: right;
+        }
+
+        /* Direction segment */
+        .segment {
+            display: inline-flex;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .segment .seg-btn {
+            background: #1e293b;
+            color: #cbd5e1;
+            border: none;
+            padding: 3px 12px;
+            font-size: 14px;
+            line-height: 1;
+            cursor: pointer;
+            border-right: 1px solid #475569;
+            transition: background 150ms, color 150ms;
+        }
+        .segment .seg-btn:last-child { border-right: none; }
+        .segment .seg-btn.is-active {
+            background: hsla(172, 60%, 38%, 0.28);
+            color: hsl(172, 80%, 80%);
+        }
+        .segment .seg-btn:hover:not(.is-active) { background: #283546; }
+
+        /* Wave select */
+        .wave-select {
+            background: #1e293b;
+            color: #cbd5e1;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .wave-select:focus { outline: none; border-color: hsl(172, 60%, 50%); }
+
+        .settings-reset {
+            margin-top: 10px;
+            background: transparent;
+            color: #64748b;
+            border: 1px dashed #334155;
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: color 150ms, border-color 150ms;
+        }
+        .settings-reset:hover { color: #94a3b8; border-color: #475569; }
+        .settings-hint {
+            color: #64748b;
+            font-size: 10px;
+            line-height: 1.4;
+            margin: 6px 2px 2px;
+            font-style: italic;
+        }
+        .settings-hint strong { color: #94a3b8; font-style: normal; font-weight: 600; }
+
+        /* ─── Interactive Harmonic Search Engine ─────────────────────────
+           The bit-badge becomes a ternary button: '1' = required, '0' =
+           forbidden, 'x' = wildcard. Each state is visually distinct so a
+           glance at the panel tells you what the search is asking for.
+           Backwards compat: the old .bit-top-*/.bit-mid-*/.bit-bot-* rules
+           still apply to the '1' and '0' states via additional classes. */
+        .bit-badge {
+            cursor: pointer;
+            user-select: none;
+            transition: transform 120ms ease-out, box-shadow 200ms, background 200ms, border-color 200ms;
+            position: relative;
+        }
+        .bit-badge:hover { transform: scale(1.06); }
+        .bit-badge:active { transform: scale(0.96); }
+
+        /* Wildcard state · dashed neutral border, faint slate fill */
+        .bit-state-x {
+            border-style: dashed !important;
+            border-color: rgba(148, 163, 184, 0.45) !important;
+            background: rgba(148, 163, 184, 0.06) !important;
+        }
+        .txt-wildcard {
+            color: #94a3b8;
+            font-style: italic;
+            text-shadow: 0 0 6px rgba(148,163,184,0.25);
+        }
+
+        /* '0' (exclude) state · explicit faint red border so it reads as
+           "blocked", not just "off". Keeps it distinct from 'x'. */
+        .bit-state-0 {
+            border-color: rgba(220, 80, 80, 0.18) !important;
+            background: rgba(220, 80, 80, 0.04) !important;
+        }
+        .txt-exclude {
+            color: #64748b;
+            text-decoration: line-through;
+            text-decoration-color: rgba(220, 80, 80, 0.5);
+        }
+
+        /* Ghost orbs · 'x' bits render on the fretboard as low-opacity
+           placeholders so the musician can see "what's flexible". */
+        .note-orb.is-wildcard {
+            opacity: 0.30;
+            filter: saturate(0.55);
+            box-shadow: 0 0 4px rgba(0,0,0,0.4), inset 0 0 3px rgba(255,255,255,0.2);
+        }
+        .note-orb.is-wildcard:hover { opacity: 0.7; }
+
+        /* Hex input badge for ambiguous (filter has 'x' bits) */
+        .hex-input-ambiguous {
+            color: #fbbf24;
+            border-color: rgba(251, 191, 36, 0.45) !important;
+        }
+
+        /* ─── Filter toolbar + results panel ───────────────────────────── */
+        .filter-toolbar {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid #334155;
+        }
+        .filter-status-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .filter-match-count {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            color: #94a3b8;
+            letter-spacing: 0.04em;
+        }
+        .filter-match-count strong {
+            color: hsl(172, 70%, 60%);
+            font-weight: 700;
+        }
+        .filter-match-count .count-zero { color: hsl(0, 65%, 60%); }
+
+        .filter-tool-btn {
+            width: 26px; height: 26px;
+            border-radius: 4px;
+            border: 1px solid #334155;
+            background: transparent;
+            color: #94a3b8;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+        }
+        .filter-tool-btn:hover {
+            color: #e2e8f0;
+            border-color: #475569;
+            background: #1e293b;
+        }
+        .filter-tool-btn.is-active {
+            color: hsl(50, 90%, 65%);
+            border-color: hsl(50, 70%, 45%);
+            background: hsla(50, 70%, 45%, 0.12);
+        }
+        .filter-tool-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            color: #475569;
+        }
+        .filter-tool-btn:disabled:hover {
+            background: transparent;
+            border-color: #334155;
+            color: #475569;
+        }
+        .filter-tool-divider {
+            width: 1px;
+            height: 18px;
+            background: #334155;
+            margin: 0 2px;
+            display: inline-block;
+        }
+
+        .results-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .results-tab-btn {
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #94a3b8;
+            background: transparent;
+            border: 1px solid #334155;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .results-tab-btn:hover { color: #e2e8f0; border-color: #475569; }
+        .results-tab-btn.active {
+            color: hsl(172, 70%, 60%);
+            border-color: hsl(172, 60%, 50%);
+            background: hsla(172, 60%, 38%, 0.15);
+        }
+        .results-tab-btn .tab-count {
+            color: #64748b;
+            font-weight: 700;
+            margin-left: 4px;
+        }
+        .results-tab-btn.active .tab-count { color: hsl(172, 70%, 70%); }
+
+        .results-list {
+            max-height: 240px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            padding-right: 2px;
+        }
+        .result-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 8px;
+            border-radius: 5px;
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(51, 65, 85, 0.4);
+            cursor: pointer;
+            transition: all 0.12s;
+        }
+        .result-row:hover {
+            background: rgba(30, 41, 59, 0.7);
+            border-color: rgba(71, 85, 105, 0.7);
+        }
+        .result-row.is-selected {
+            border-color: hsl(172, 60%, 50%);
+            background: hsla(172, 60%, 38%, 0.12);
+        }
+        .result-row .result-name {
+            flex: 1; min-width: 0;
+            font-size: 12px;
+            color: #e2e8f0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .result-row .result-hex {
+            font-size: 10px;
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            color: #64748b;
+            flex-shrink: 0;
+        }
+        .result-row .result-star {
+            width: 20px; height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #475569;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: color 0.15s, transform 0.12s;
+            flex-shrink: 0;
+        }
+        .result-row .result-star:hover { color: hsl(50, 80%, 65%); transform: scale(1.18); }
+        .result-row .result-star.is-favorite { color: hsl(50, 90%, 62%); }
+        .result-row .result-remove {
+            width: 18px; height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            color: #475569;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: color 0.15s;
+            flex-shrink: 0;
+        }
+        .result-row .result-remove:hover { color: hsl(0, 70%, 60%); }
+        .result-empty {
+            padding: 18px 12px;
+            text-align: center;
+            color: #64748b;
+            font-size: 12px;
+            font-style: italic;
+            border: 1px dashed rgba(71, 85, 105, 0.4);
+            border-radius: 6px;
+        }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -415,15 +903,111 @@
             <!-- Scale Intelligence Panel -->
             <div class="lg:col-span-1 bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-lg flex flex-col justify-between">
                 <div>
-                    <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Scale Intelligence</h2>
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Scale Intelligence</h2>
+                        <div class="relative flex items-center gap-1">
+                            <button id="auditionBtn" class="audition-btn" title="Play the scale — notes highlight in bit-vector, legend, and on the fretboard">
+                                <span class="audition-icon">▶</span>
+                                <span class="audition-label">Audition</span>
+                            </button>
+                            <button id="auditionSettingsBtn" class="audition-gear-btn" title="Audition settings" aria-haspopup="true" aria-expanded="false">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            </button>
+
+                            <!-- Settings popover · gear-anchored, hidden until toggled -->
+                            <div id="auditionSettings" class="audition-settings hidden" role="dialog" aria-label="Audition settings">
+                                <h3>Audition</h3>
+
+                                <div class="settings-row">
+                                    <label for="auSlide">Slide between notes</label>
+                                    <button type="button" id="auSlide" class="toggle-pill" data-state="on" aria-pressed="true">On</button>
+                                </div>
+
+                                <div class="settings-row">
+                                    <label for="auTempo">Tempo</label>
+                                    <div class="flex items-center gap-2">
+                                        <input type="range" id="auTempo" min="180" max="700" step="20" value="380" class="tempo-slider"/>
+                                        <span id="auTempoLabel" class="tempo-readout">380ms</span>
+                                    </div>
+                                </div>
+
+                                <div class="settings-row">
+                                    <label>Direction</label>
+                                    <div class="segment" role="radiogroup" aria-label="Audition direction">
+                                        <button type="button" class="seg-btn" data-dir="up"     title="Ascending only">↑</button>
+                                        <button type="button" class="seg-btn" data-dir="down"   title="Descending only">↓</button>
+                                        <button type="button" class="seg-btn" data-dir="updown" title="Up then down">↕</button>
+                                    </div>
+                                </div>
+
+                                <div class="settings-row">
+                                    <label for="auInstrument">Instrument</label>
+                                    <select id="auInstrument" class="wave-select">
+                                        <optgroup label="Synthesis">
+                                            <option value="synth:pluck">Pluck (string)</option>
+                                            <option value="synth:bell">Bell</option>
+                                            <option value="synth:reed">Reed</option>
+                                            <option value="synth:pad">Pad</option>
+                                        </optgroup>
+                                        <optgroup label="Waveforms">
+                                            <option value="wave:triangle">Triangle</option>
+                                            <option value="wave:sine">Sine</option>
+                                            <option value="wave:sawtooth">Sawtooth</option>
+                                            <option value="wave:square">Square</option>
+                                        </optgroup>
+                                        <optgroup label="Sampled (loads on first use)">
+                                            <option value="sf:acoustic_guitar_steel">Acoustic Guitar</option>
+                                            <option value="sf:acoustic_guitar_nylon">Nylon Guitar</option>
+                                            <option value="sf:acoustic_grand_piano">Acoustic Piano</option>
+                                            <option value="sf:electric_piano_1">Electric Piano</option>
+                                            <option value="sf:violin">Violin</option>
+                                            <option value="sf:cello">Cello</option>
+                                            <option value="sf:flute">Flute</option>
+                                            <option value="sf:harp">Harp</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <p class="settings-hint">Slide applies to <strong>Waveforms</strong> only; synth and sampled instruments retrigger each note.</p>
+
+                                <button type="button" id="auReset" class="settings-reset">Reset to defaults</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="flex items-center gap-4 mb-3">
                         <div class="text-2xl font-bold text-white leading-tight" id="scaleTitle">Loading...</div>
                     </div>
                     <p id="scaleInfo" class="text-slate-300 text-sm leading-relaxed mb-4">...</p>
                 </div>
-                
+
                 <div class="flex flex-col gap-2 font-mono text-xs pb-1 mt-auto" id="binaryDisplay">
-                    <!-- Binary bits injected here -->
+                    <!-- Ternary bit buttons injected here (1 / 0 / x) -->
+                </div>
+
+                <!-- Filter toolbar + tabbed result list (Matches/Recents/Favorites) -->
+                <div class="filter-toolbar" id="filterToolbar">
+                    <div class="filter-status-row">
+                        <div class="filter-match-count" id="filterMatchCount">…</div>
+                        <div class="flex items-center gap-1">
+                            <button id="filterUndoBtn" class="filter-tool-btn" title="Undo (Ctrl/Cmd+Z)" disabled>↶</button>
+                            <button id="filterRedoBtn" class="filter-tool-btn" title="Redo (Ctrl/Cmd+Shift+Z)" disabled>↷</button>
+                            <span class="filter-tool-divider"></span>
+                            <button id="filterResetBtn" class="filter-tool-btn" title="Reset all bits to wildcard">↺</button>
+                            <button id="filterClearBtn" class="filter-tool-btn" title="Cycle: all 0 → all 1 → all x → restore baseline">0</button>
+                            <button id="filterSaveBtn" class="filter-tool-btn" title="Save current filter to favorites">★</button>
+                        </div>
+                    </div>
+                    <div class="results-tabs">
+                        <button class="results-tab-btn active" data-results-tab="matches">
+                            Matches<span class="tab-count" id="tabCountMatches">0</span>
+                        </button>
+                        <button class="results-tab-btn" data-results-tab="recents">
+                            Recents<span class="tab-count" id="tabCountRecents">0</span>
+                        </button>
+                        <button class="results-tab-btn" data-results-tab="favorites">
+                            Favorites<span class="tab-count" id="tabCountFavorites">0</span>
+                        </button>
+                    </div>
+                    <div class="results-list" id="resultsList"></div>
                 </div>
             </div>
 
@@ -436,11 +1020,11 @@
                     <div class="space-y-3">
                         <h3 class="text-xs font-bold border-b pb-1" style="color: hsl(42,85%,58%); border-color: hsla(42,85%,58%,0.3);">Structural</h3>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(42,92%,58%); box-shadow: 0 0 8px hsla(42,90%,55%,0.5);"></span> 
+                            <span class="legend-swatch w-5 h-5 mt-0.5 shrink-0 rounded-full" data-intervals="0" style="background: hsl(42,92%,58%); box-shadow: 0 0 8px hsla(42,90%,55%,0.5);"></span>
                             <div><strong class="text-slate-200">Root (R):</strong> The absolute home base. Complete resolution.</div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(40,78%,48%); box-shadow: 0 0 8px hsla(40,75%,45%,0.5);"></span> 
+                            <span class="legend-swatch w-5 h-5 mt-0.5 shrink-0 rounded-full" data-intervals="7" style="background: hsl(40,78%,48%); box-shadow: 0 0 8px hsla(40,75%,45%,0.5);"></span>
                             <div><strong class="text-slate-200">Perfect 5th:</strong> Power and stability. The strongest support for the root.</div>
                         </div>
                     </div>
@@ -449,11 +1033,11 @@
                     <div class="space-y-3">
                         <h3 class="text-xs font-bold border-b pb-1" style="color: hsl(12,85%,58%); border-color: hsla(12,85%,58%,0.3);">Chord Quality</h3>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(14,88%,60%); box-shadow: 0 0 8px hsla(14,85%,58%,0.5);"></span> 
+                            <span class="legend-swatch w-5 h-5 mt-0.5 shrink-0 rounded-full" data-intervals="4,11" style="background: hsl(14,88%,60%); box-shadow: 0 0 8px hsla(14,85%,58%,0.5);"></span>
                             <div><strong class="text-slate-200">Major 3rd / Maj7:</strong> Bright, open character. Defines major harmony.</div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(6,80%,54%); box-shadow: 0 0 8px hsla(6,75%,52%,0.5);"></span> 
+                            <span class="legend-swatch w-5 h-5 mt-0.5 shrink-0 rounded-full" data-intervals="3,10" style="background: hsl(6,80%,54%); box-shadow: 0 0 8px hsla(6,75%,52%,0.5);"></span>
                             <div><strong class="text-slate-200">Minor 3rd / Min7:</strong> Deeper, introspective. Defines minor harmony.</div>
                         </div>
                     </div>
@@ -462,11 +1046,11 @@
                     <div class="space-y-3">
                         <h3 class="text-xs font-bold border-b pb-1" style="color: hsl(175,55%,52%); border-color: hsla(175,55%,52%,0.3);">Extensions</h3>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(172,70%,56%); box-shadow: 0 0 8px hsla(172,65%,54%,0.5);"></span> 
+                            <span class="legend-swatch w-5 h-5 mt-0.5 shrink-0 rounded-full" data-intervals="2,9" style="background: hsl(172,70%,56%); box-shadow: 0 0 8px hsla(172,65%,54%,0.5);"></span>
                             <div><strong class="text-slate-200">2nd / 6th:</strong> Airy, floating color tones. Dreamy and unresolved.</div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(190,35%,50%); box-shadow: 0 0 8px hsla(190,30%,48%,0.5);"></span> 
+                            <span class="legend-swatch w-5 h-5 mt-0.5 shrink-0 rounded-full" data-intervals="5" style="background: hsl(190,35%,50%); box-shadow: 0 0 8px hsla(190,30%,48%,0.5);"></span>
                             <div><strong class="text-slate-200">4th (sus):</strong> Structural ambiguity. Yearns to resolve to the 3rd.</div>
                         </div>
                     </div>
@@ -475,11 +1059,11 @@
                     <div class="space-y-3">
                         <h3 class="text-xs font-bold border-b pb-1" style="color: hsl(275,40%,55%); border-color: hsla(275,40%,55%,0.3);">Altered</h3>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(270,45%,58%); box-shadow: 0 0 8px hsla(270,40%,55%,0.5);"></span> 
+                            <span class="legend-swatch w-5 h-5 mt-0.5 shrink-0 rounded-full" data-intervals="1,8" style="background: hsl(270,45%,58%); box-shadow: 0 0 8px hsla(270,40%,55%,0.5);"></span>
                             <div><strong class="text-slate-200">b2 / b6:</strong> Acidic friction. Half-step above chord tones. Exotic suspense.</div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <span class="w-5 h-5 mt-0.5 shrink-0 rounded-full" style="background: hsl(280,50%,46%); box-shadow: 0 0 8px hsla(280,45%,44%,0.5);"></span> 
+                            <span class="legend-swatch w-5 h-5 mt-0.5 shrink-0 rounded-full" data-intervals="6" style="background: hsl(280,50%,46%); box-shadow: 0 0 8px hsla(280,45%,44%,0.5);"></span>
                             <div><strong class="text-slate-200">Tritone (b5):</strong> Maximum symmetrical tension. Piercing, demands resolution.</div>
                         </div>
                     </div>
@@ -788,6 +1372,305 @@
         update();
     }
 
+    // ─── Interactive Harmonic Search Engine ──────────────────
+    // Ternary state machine. Each of the 12 bits is '1' (required),
+    // '0' (forbidden), or 'x' (wildcard / don't care). The filter is the
+    // ONE source of truth for the page: the hex input, scale title,
+    // bit-buttons, fretboard, and legend all derive from it.
+    //
+    // Indexing: filter[i] is the MSB-first bit i (i=0 is the most
+    // significant bit, i=11 the least). In LTR direction filter[i] maps
+    // to interval i; in RTL it maps to interval (11 - i). This mirrors
+    // the existing binStr convention so renderFretboard's interval
+    // semantics stay identical.
+    let currentFilterVector = Array(12).fill('x');
+    const STATE_NEXT = { '1': '0', '0': 'x', 'x': '1' };
+    const STATE_PREV = { '1': 'x', '0': '1', 'x': '0' };
+
+    // ─── Undo / redo ──────────────────────────────────────────────────
+    // Linear history of filter snapshots (12-char strings of '1'/'0'/'x').
+    // Any mutating helper calls pushUndo(before) right before changing
+    // currentFilterVector; doing a new mutation clears the redo stack.
+    // undo()/redo() bypass pushUndo and shuttle entries between stacks
+    // directly so they don't poison the history.
+    const UNDO_LIMIT = 64;
+    let undoStack = [];   // past states, oldest at index 0
+    let redoStack = [];   // future states, top of stack = next redo
+    function pushUndo(prevFilterStr) {
+        if (!prevFilterStr || prevFilterStr.length !== 12) return;
+        if (undoStack.length && undoStack[undoStack.length - 1] === prevFilterStr) return;
+        if (prevFilterStr === filterAsString()) return; // no-op mutation
+        undoStack.push(prevFilterStr);
+        if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+        redoStack.length = 0;
+    }
+    function undo() {
+        if (!undoStack.length) return;
+        const prev = undoStack.pop();
+        redoStack.push(filterAsString());
+        currentFilterVector = filterFromString(prev);
+        update();
+    }
+    function redo() {
+        if (!redoStack.length) return;
+        const next = redoStack.pop();
+        undoStack.push(filterAsString());
+        currentFilterVector = filterFromString(next);
+        update();
+    }
+    function clearHistory() { undoStack = []; redoStack = []; }
+    function updateUndoRedoButtons() {
+        const u = document.getElementById('filterUndoBtn');
+        const r = document.getElementById('filterRedoBtn');
+        if (u) {
+            u.disabled = undoStack.length === 0;
+            u.title = `Undo (Ctrl/Cmd+Z)${undoStack.length ? ` — ${undoStack.length} step${undoStack.length === 1 ? '' : 's'}` : ''}`;
+        }
+        if (r) {
+            r.disabled = redoStack.length === 0;
+            r.title = `Redo (Ctrl/Cmd+Shift+Z)${redoStack.length ? ` — ${redoStack.length} step${redoStack.length === 1 ? '' : 's'}` : ''}`;
+        }
+        // Tooltip + icon for the cycle button reflect what the NEXT tap
+        // will do. Any mismatch between current filter and clearCycleExpected
+        // means the cycle has been broken by an outside mutation — the next
+        // tap will start fresh with the current filter as baseline (and so
+        // the icon shows '0' because step 0 = all '0').
+        const c = document.getElementById('filterClearBtn');
+        if (c) {
+            const CYCLE_NEXT_LABELS = ['all 0', 'all 1', 'all x', 'restore baseline'];
+            const CYCLE_NEXT_ICONS  = ['0',     '1',     'x',     '↩'];
+            const inCycle = clearCycleStep >= 0 && filterAsString() === clearCycleExpected;
+            const nextStep = inCycle ? ((clearCycleStep + 1) % 4) : 0;
+            c.innerText = CYCLE_NEXT_ICONS[nextStep];
+            c.dataset.nextStep = String(nextStep);
+            if (!inCycle) {
+                c.title = `Cycle: all 0 → all 1 → all x → restore baseline — tap for ${CYCLE_NEXT_LABELS[0]}`;
+            } else {
+                c.title = `Cycle step ${clearCycleStep + 1}/4 — tap for ${CYCLE_NEXT_LABELS[nextStep]}`;
+            }
+        }
+    }
+
+    const RECENTS_KEY   = 'melagabra:guitar:recents:v1';
+    const FAVORITES_KEY = 'melagabra:guitar:favorites:v1';
+    const RECENTS_LIMIT = 12;
+    let recentEntries = [];   // [{ filter, name }]  most-recent-first
+    let favoriteEntries = []; // [{ filter, name }]
+    let currentResultsTab = 'matches';
+
+    function loadRecents() {
+        try {
+            const raw = localStorage.getItem(RECENTS_KEY);
+            if (raw) recentEntries = JSON.parse(raw).filter(e => typeof e?.filter === 'string' && e.filter.length === 12);
+        } catch (_) { recentEntries = []; }
+    }
+    function saveRecents() {
+        try { localStorage.setItem(RECENTS_KEY, JSON.stringify(recentEntries.slice(0, RECENTS_LIMIT))); }
+        catch (_) {}
+    }
+    function loadFavorites() {
+        try {
+            const raw = localStorage.getItem(FAVORITES_KEY);
+            if (raw) favoriteEntries = JSON.parse(raw).filter(e => typeof e?.filter === 'string' && e.filter.length === 12);
+        } catch (_) { favoriteEntries = []; }
+    }
+    function saveFavorites() {
+        try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteEntries)); }
+        catch (_) {}
+    }
+
+    function pushRecent(filter, name) {
+        if (!filter || filter.length !== 12) return;
+        // De-dupe by filter signature, keeping the freshest name + position.
+        recentEntries = [{ filter, name }, ...recentEntries.filter(e => e.filter !== filter)].slice(0, RECENTS_LIMIT);
+        saveRecents();
+    }
+    function isFavorite(filter) {
+        return favoriteEntries.some(e => e.filter === filter);
+    }
+    function toggleFavorite(filter, name) {
+        if (!filter || filter.length !== 12) return;
+        const existingIdx = favoriteEntries.findIndex(e => e.filter === filter);
+        if (existingIdx >= 0) favoriteEntries.splice(existingIdx, 1);
+        else favoriteEntries = [{ filter, name }, ...favoriteEntries];
+        saveFavorites();
+    }
+    function removeRecent(filter) {
+        recentEntries = recentEntries.filter(e => e.filter !== filter);
+        saveRecents();
+    }
+
+    // ─── Filter ↔ hex helpers ───
+    // filterFromHex: 3-char hex → 12-char filter of '1'/'0' (no 'x's).
+    function filterFromHex(hex) {
+        if (!hex || !/^[0-9A-Fa-f]{1,3}$/.test(hex)) return Array(12).fill('0').join('');
+        const num = parseInt(hex, 16) & 0xFFF;
+        return num.toString(2).padStart(12, '0');
+    }
+    // filterToHex: 12-char filter → 3-char hex; a nibble containing any 'x'
+    // collapses to '?' so the badge never lies about the bit state.
+    function filterToHex(filterArr) {
+        const f = filterArr || currentFilterVector;
+        const nibs = [];
+        for (let n = 0; n < 3; n++) {
+            let val = 0;
+            let hasX = false;
+            for (let b = 0; b < 4; b++) {
+                const s = f[n * 4 + b];
+                if (s === 'x') hasX = true;
+                else if (s === '1') val |= (1 << (3 - b));
+            }
+            nibs.push(hasX ? '?' : val.toString(16).toUpperCase());
+        }
+        return nibs.join('');
+    }
+
+    function filterAsString(arr) {
+        return (arr || currentFilterVector).join('');
+    }
+    function filterFromString(s) {
+        if (!s || s.length !== 12 || !/^[10x]{12}$/.test(s)) return Array(12).fill('x');
+        return s.split('');
+    }
+
+    function activeIntervalsFromFilter() {
+        const dir = document.getElementById('bitDirSelect').value;
+        const out = [];
+        for (let i = 0; i < 12; i++) {
+            if (currentFilterVector[i] === '1') {
+                out.push((dir === 'LTR') ? i : (11 - i));
+            }
+        }
+        return out;
+    }
+    function wildcardIntervalsFromFilter() {
+        const dir = document.getElementById('bitDirSelect').value;
+        const out = [];
+        for (let i = 0; i < 12; i++) {
+            if (currentFilterVector[i] === 'x') {
+                out.push((dir === 'LTR') ? i : (11 - i));
+            }
+        }
+        return out;
+    }
+
+    // The core matcher. A scale passes iff every '1' bit corresponds to a
+    // note the scale has, every '0' bit corresponds to a note it lacks,
+    // and 'x' bits are unconstrained.
+    function computeSearchResults() {
+        const dir = document.getElementById('bitDirSelect').value;
+        const matched = [];
+        for (const scale of SCALE_DICT) {
+            if (!scale.intervals) continue;
+            let isMatch = true;
+            for (let i = 0; i < 12; i++) {
+                const intervalAssigned = (dir === 'LTR') ? i : (11 - i);
+                const filterState = currentFilterVector[i];
+                const scaleHasNote = scale.intervals.includes(intervalAssigned);
+                if (filterState === '1' && !scaleHasNote) { isMatch = false; break; }
+                if (filterState === '0' &&  scaleHasNote) { isMatch = false; break; }
+                // 'x' is wildcard — no constraint.
+            }
+            if (isMatch) matched.push(scale);
+        }
+        return matched;
+    }
+
+    function cycleBit(filterIdx, reverse) {
+        const before = filterAsString();
+        const cur = currentFilterVector[filterIdx];
+        currentFilterVector[filterIdx] = (reverse ? STATE_PREV : STATE_NEXT)[cur];
+        pushUndo(before);
+        update();
+    }
+
+    function resetFilter() {
+        const before = filterAsString();
+        currentFilterVector = Array(12).fill('x');
+        pushUndo(before);
+        update();
+    }
+
+    // The ∅ button cycles through 4 states on repeated taps:
+    //   step 0 → all '0'
+    //   step 1 → all '1'
+    //   step 2 → all 'x'
+    //   step 3 → restore the baseline (filter before the cycle started)
+    // The cycle "remembers" the baseline across taps. Any other mutation
+    // (bit click, hex edit, reset, scale pick, undo/redo) implicitly
+    // breaks the cycle: the next ∅ tap captures a fresh baseline.
+    //
+    // Detection works by comparing the current filter to `clearCycleExpected`
+    // — the value we set on the previous cycle tap. If they match, we're
+    // still mid-cycle; otherwise the user (or undo) changed it and we
+    // restart.
+    const CLEAR_CYCLE_TARGETS = [
+        () => '000000000000',
+        () => '111111111111',
+        () => 'xxxxxxxxxxxx',
+        (baseline) => baseline,
+    ];
+    let clearCycleStep = -1;
+    let clearCycleBaseline = null;
+    let clearCycleExpected = null;
+    function clearFilterCycle() {
+        const cur = filterAsString();
+        if (clearCycleStep < 0 || cur !== clearCycleExpected) {
+            // Fresh cycle: anchor the baseline at whatever the user has now.
+            clearCycleBaseline = cur;
+            clearCycleStep = 0;
+        } else {
+            clearCycleStep = (clearCycleStep + 1) % 4;
+        }
+        const target = CLEAR_CYCLE_TARGETS[clearCycleStep](clearCycleBaseline);
+        const before = cur;
+        currentFilterVector = filterFromString(target);
+        pushUndo(before);
+        clearCycleExpected = target;
+        update();
+    }
+    // Legacy name kept for callers that wired up the old one-shot clear.
+    function clearFilterZero() { clearFilterCycle(); }
+
+    // Load a scale's pattern into the filter (1s where the scale has the
+    // note, 0s elsewhere — no wildcards). Also records to recents.
+    function setFilterFromScale(scale) {
+        const before = filterAsString();
+        const dir = document.getElementById('bitDirSelect').value;
+        const next = Array(12).fill('0');
+        for (let i = 0; i < 12; i++) {
+            const intervalAssigned = (dir === 'LTR') ? i : (11 - i);
+            if (scale.intervals.includes(intervalAssigned)) next[i] = '1';
+        }
+        currentFilterVector = next;
+        pushUndo(before);
+        pushRecent(filterAsString(), scale.name);
+        update();
+    }
+    function setFilterFromEntry(entry) {
+        if (!entry?.filter || entry.filter.length !== 12) return;
+        const before = filterAsString();
+        currentFilterVector = filterFromString(entry.filter);
+        pushUndo(before);
+        // Bump it in recents so most-recent-first stays accurate.
+        pushRecent(entry.filter, entry.name);
+        update();
+    }
+
+    // Produce a stable display name for the current filter (used when the
+    // user saves a custom pattern as a favorite). Prefers the matched scale
+    // name when the filter uniquely identifies one and contains no wildcards.
+    function filterDisplayName() {
+        const matched = computeSearchResults();
+        const hasX = currentFilterVector.includes('x');
+        if (matched.length === 1 && !hasX) return matched[0].name;
+        const ones = currentFilterVector.filter(b => b === '1').length;
+        const xs   = currentFilterVector.filter(b => b === 'x').length;
+        if (matched.length === 1) return `${matched[0].name} (+${xs}?)`;
+        const hex = filterToHex();
+        return `Filter ${hex} · ${ones} req · ${xs} wild`;
+    }
+
     // ─── Scale Chooser ───────────────────────────────────────
     function intervalsToHex(intervals) {
         let num = 0;
@@ -1014,7 +1897,18 @@
     }
 
     function selectScale(hex) {
-        document.getElementById('hexInput').value = hex;
+        // The scale chooser modal hands us a hex string; route it through
+        // the filter so the filter is the canonical source of truth. We
+        // also record the user-visible scale name into recents.
+        const before = filterAsString();
+        currentFilterVector = filterFromHex(hex).split('');
+        pushUndo(before);
+        // Best-effort name lookup for recents (matches the modal's data).
+        const matched = computeSearchResults();
+        const name = (matched.length === 1)
+            ? matched[0].name
+            : `Hex ${hex.toUpperCase()}`;
+        pushRecent(filterAsString(), name);
         closeScaleModal();
         update();
     }
@@ -1030,10 +1924,73 @@
             rootSelect.appendChild(opt);
         });
 
-        document.getElementById('hexInput').addEventListener('input', update);
+        // Hex input is bidirectional: typing a valid 1-3 char hex replaces
+        // the filter (with explicit 1s/0s — no wildcards). When the filter
+        // contains 'x' bits, update() writes back a "D??"-style display so
+        // the field never claims a definite value it can't justify.
+        //
+        // Undo grouping: a single "typing session" is one undo step. We
+        // snapshot the filter on focus and push a single entry on blur
+        // (or Enter) if the result differs. While typing, `input` events
+        // mutate the filter live but do NOT push to undo.
+        const hexInput = document.getElementById('hexInput');
+        let hexUndoBaseline = null;
+        hexInput.addEventListener('focus', () => {
+            hexUndoBaseline = filterAsString();
+        });
+        hexInput.addEventListener('input', (e) => {
+            const v = e.target.value.trim();
+            if (!/^[0-9A-Fa-f]{1,3}$/.test(v)) return; // ignore partials w/ '?'
+            currentFilterVector = filterFromHex(v).split('');
+            update();
+        });
+        hexInput.addEventListener('blur', () => {
+            if (hexUndoBaseline !== null) {
+                pushUndo(hexUndoBaseline);
+                hexUndoBaseline = null;
+            }
+            hexInput.value = filterToHex();
+            updateUndoRedoButtons();
+        });
+        hexInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') hexInput.blur();
+        });
+
         document.getElementById('rootSelect').addEventListener('change', update);
         document.getElementById('bitDirSelect').addEventListener('change', update);
         document.getElementById('displaySelect').addEventListener('change', update);
+
+        // ─── Filter toolbar buttons + result tabs ───────────────────────
+        document.getElementById('filterUndoBtn').addEventListener('click', undo);
+        document.getElementById('filterRedoBtn').addEventListener('click', redo);
+        document.getElementById('filterResetBtn').addEventListener('click', resetFilter);
+        document.getElementById('filterClearBtn').addEventListener('click', clearFilterCycle);
+        document.getElementById('filterSaveBtn').addEventListener('click', () => {
+            toggleFavorite(filterAsString(), filterDisplayName());
+            renderResultsList();
+        });
+        document.querySelectorAll('.results-tab-btn').forEach(b => {
+            b.addEventListener('click', () => setResultsTab(b.dataset.resultsTab));
+        });
+
+        // ─── Keyboard shortcuts ─────────────────────────────────────────
+        // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z (or Cmd/Ctrl+Y) = redo.
+        // When the user is editing the hex input, let the browser handle
+        // the chord natively (it'll undo characters in the field, and our
+        // input-event handler will sync the filter from the new value).
+        document.addEventListener('keydown', (e) => {
+            const mod = e.ctrlKey || e.metaKey;
+            if (!mod) return;
+            const inHexInput = e.target && e.target.id === 'hexInput';
+            const key = e.key.toLowerCase();
+            const isUndo = key === 'z' && !e.shiftKey;
+            const isRedo = (key === 'z' && e.shiftKey) || key === 'y';
+            if (!(isUndo || isRedo)) return;
+            if (inHexInput) return; // let the field do its own undo
+            e.preventDefault();
+            if (isUndo) undo();
+            else redo();
+        });
 
         document.getElementById('tuningBtn').addEventListener('click', openTuningModal);
         document.getElementById('tuningModalClose').addEventListener('click', closeTuningModal);
@@ -1051,29 +2008,27 @@
         document.querySelectorAll('.scale-tab-btn').forEach(btn => {
             btn.addEventListener('click', () => switchScaleTab(btn.dataset.tab));
         });
+
+        // Audition button — click to play scale; click again to stop.
+        const auditionBtn = document.getElementById('auditionBtn');
+        if (auditionBtn) auditionBtn.addEventListener('click', startAudition);
+        // Audition settings popover (gear icon) + controls
+        wireAuditionSettings();
+        syncAuditionSettingsUI();
     }
 
+    // getScaleData reads the FILTER (source of truth) and projects it
+    // into the intervals/binStr/dir shape that the rest of the page
+    // already understands. binStr maps '1'→'1' and '0'/'x'→'0' so any
+    // legacy consumer that wants a strict bit string gets a sensible
+    // best-effort answer; wildcardIntervals exposes the 'x' positions for
+    // consumers (fretboard, legend) that want to render ambiguity.
     function getScaleData() {
-        let hex = document.getElementById('hexInput').value.trim();
-        if (!/^[0-9A-Fa-f]{1,3}$/.test(hex)) hex = "0"; // fallback
-
-        let dir = document.getElementById('bitDirSelect').value;
-        
-        // Parse hex to 12 bit binary string
-        let num = parseInt(hex, 16);
-        let binStr = (num & 0xFFF).toString(2).padStart(12, '0');
-
-        let activeIntervals = [];
-        
-        // Map bits to intervals
-        for (let i = 0; i < 12; i++) {
-            let bit = (dir === 'LTR') ? binStr[i] : binStr[11 - i];
-            if (bit === '1') {
-                activeIntervals.push(i);
-            }
-        }
-
-        return { binStr, activeIntervals, dir };
+        const dir = document.getElementById('bitDirSelect').value;
+        const activeIntervals   = activeIntervalsFromFilter();
+        const wildcardIntervals = wildcardIntervalsFromFilter();
+        const binStr = currentFilterVector.map(b => (b === '1' ? '1' : '0')).join('');
+        return { binStr, activeIntervals, wildcardIntervals, dir };
     }
 
     // Deep Harmonic Function Color Mapping
@@ -1097,13 +2052,18 @@
         }
     }
 
-    function renderIntelligence(activeIntervals, binStr, dir) {
-        let titleEl = document.getElementById('scaleTitle');
-        let infoEl = document.getElementById('scaleInfo');
-        let binEl = document.getElementById('binaryDisplay');
+    // renderIntelligence builds the 12 ternary bit-BUTTONS, the nibble
+    // hex badges (with '?' when the nibble is ambiguous), and the scale
+    // title/info derived from the current matched-scales list.
+    function renderIntelligence(matched, wildcardIntervals) {
+        const titleEl = document.getElementById('scaleTitle');
+        const infoEl  = document.getElementById('scaleInfo');
+        const binEl   = document.getElementById('binaryDisplay');
+        const dir     = document.getElementById('bitDirSelect').value;
         binEl.innerHTML = '';
 
-        // 3 nibble rows, physical bit order fixed (top=11..8, mid=7..4, bot=3..0)
+        // 3 nibble rows, physical bit order fixed (top=11..8, mid=7..4, bot=3..0).
+        // filterIdx for physical bit `bitIdx` is (11 - bitIdx).
         const rows = [
             { bits: [11, 10, 9, 8], hexClass: 'hex-top', bitPrefix: 'bit-top', label: 'Sa–R₁–R₂–R₃' },
             { bits: [7,  6,  5,  4], hexClass: 'hex-mid', bitPrefix: 'bit-mid', label: 'G₃–M₁–M₂–Pa' },
@@ -1129,64 +2089,121 @@
         };
 
         rows.forEach(row => {
-            // Compute nibble value from physical bit string.
-            // binStr[0] = MSB (bit 11); binStr[11] = LSB (bit 0).
+            // Hex digit per nibble: '?' if any bit in this nibble is 'x',
+            // otherwise the numeric digit assembled from '1's only.
             let nibbleVal = 0;
+            let nibbleHasX = false;
             row.bits.forEach((bitIdx, pos) => {
-                let strIdx = 11 - bitIdx;
-                if (binStr[strIdx] === '1') nibbleVal |= (1 << (3 - pos));
+                const fIdx = 11 - bitIdx;
+                const s = currentFilterVector[fIdx];
+                if (s === 'x') nibbleHasX = true;
+                else if (s === '1') nibbleVal |= (1 << (3 - pos));
             });
-            let hexDigit = nibbleVal.toString(16).toUpperCase();
+            const hexDigit = nibbleHasX ? '?' : nibbleVal.toString(16).toUpperCase();
 
-            let rowEl = document.createElement('div');
+            const rowEl = document.createElement('div');
             rowEl.className = 'bin-row';
 
-            let hexBadge = document.createElement('div');
+            const hexBadge = document.createElement('div');
             hexBadge.className = `hex-badge ${row.hexClass}`;
             hexBadge.innerText = hexDigit;
-            hexBadge.title = row.label;
+            hexBadge.title = row.label + (nibbleHasX ? ' (ambiguous – contains wildcards)' : '');
             rowEl.appendChild(hexBadge);
 
             row.bits.forEach(bitIdx => {
-                let strIdx = 11 - bitIdx;
-                let bit = binStr[strIdx];
-                let intervalAssigned = (dir === 'LTR') ? bitIdx : (11 - bitIdx);
-                let isActive = bit === '1';
+                const fIdx = 11 - bitIdx;
+                const state = currentFilterVector[fIdx];
+                // LTR ("MSB = Root"): physical bit p represents interval (11 − p)
+                // RTL ("LSB = Root"): physical bit p represents interval p
+                const intervalAssigned = (dir === 'LTR') ? (11 - bitIdx) : bitIdx;
 
-                let badge = document.createElement('div');
-                badge.className = `bit-badge ${isActive ? row.bitPrefix + '-1' : row.bitPrefix + '-0'}`;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.dataset.interval = intervalAssigned;
+                btn.dataset.filterIdx = fIdx;
+                btn.dataset.state = state;
 
-                let topLabel = document.createElement('span');
-                topLabel.className = isActive ? `font-bold ${txtForInterval(intervalAssigned)}` : 'txt-inactive';
-                topLabel.innerText = bit;
+                // Base class + per-state visual:
+                //   '1' uses the existing nibble-tinted "active" rule
+                //   '0' uses the existing inactive rule + .bit-state-0
+                //   'x' uses .bit-state-x (dashed slate border)
+                let stateClass;
+                if (state === '1') stateClass = `${row.bitPrefix}-1`;
+                else if (state === '0') stateClass = `${row.bitPrefix}-0 bit-state-0`;
+                else stateClass = `${row.bitPrefix}-0 bit-state-x`;
+                btn.className = `bit-badge ${stateClass}`;
+                btn.title = `${INTERVAL_NAMES[intervalAssigned]} · state: ${state} · click to cycle (1 → 0 → x), shift-click to reverse`;
 
-                let botLabel = document.createElement('span');
+                const topLabel = document.createElement('span');
+                if (state === '1') {
+                    topLabel.className = `font-bold ${txtForInterval(intervalAssigned)}`;
+                    topLabel.innerText = '1';
+                } else if (state === '0') {
+                    topLabel.className = 'txt-exclude';
+                    topLabel.innerText = '0';
+                } else {
+                    topLabel.className = 'font-bold txt-wildcard';
+                    topLabel.innerText = 'x';
+                }
+
+                const botLabel = document.createElement('span');
                 botLabel.className = 'text-[9px] text-slate-400 mt-0.5';
                 botLabel.innerText = INTERVAL_NAMES[intervalAssigned];
 
-                badge.appendChild(topLabel);
-                badge.appendChild(botLabel);
-                rowEl.appendChild(badge);
+                btn.appendChild(topLabel);
+                btn.appendChild(botLabel);
+
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    cycleBit(fIdx, e.shiftKey);
+                });
+                btn.addEventListener('contextmenu', (e) => {
+                    // Right-click = reverse cycle, no menu.
+                    e.preventDefault();
+                    cycleBit(fIdx, true);
+                });
+
+                rowEl.appendChild(btn);
             });
 
             binEl.appendChild(rowEl);
         });
 
-        // Identify Scale
-        let match = SCALE_DICT.find(s => JSON.stringify(s.intervals) === JSON.stringify(activeIntervals));
-        
-        if (match) {
-            titleEl.innerText = match.name;
-            infoEl.innerText = match.info;
-            titleEl.className = "text-xl lg:text-2xl font-bold text-cyan-400";
+        // ─── Title / info — driven entirely by the matched-scales count ───
+        const hasWildcard = currentFilterVector.includes('x');
+        const onesCount = currentFilterVector.filter(b => b === '1').length;
+        const zerosCount = currentFilterVector.filter(b => b === '0').length;
+
+        if (matched.length === 0) {
+            titleEl.innerText = (onesCount === 0 && zerosCount === 0)
+                ? 'Wildcard filter'
+                : 'No scales match';
+            titleEl.className = 'text-xl lg:text-2xl font-bold text-slate-400';
+            if (onesCount === 0 && zerosCount === 0) {
+                infoEl.innerText = 'Every bit is a wildcard. Toggle bits to "1" to require a note, "0" to forbid one. Click any matching scale below to load it.';
+            } else {
+                infoEl.innerText = 'No scale in the dictionary satisfies this filter. Relax some "0"s to wildcards or pick a recent / favorite below.';
+            }
+        } else if (matched.length === 1 && !hasWildcard) {
+            const m = matched[0];
+            titleEl.innerText = m.name;
+            titleEl.className = 'text-xl lg:text-2xl font-bold text-cyan-400';
+            infoEl.innerText = m.info;
+        } else if (matched.length === 1) {
+            const m = matched[0];
+            titleEl.innerText = m.name;
+            titleEl.className = 'text-xl lg:text-2xl font-bold text-cyan-400';
+            infoEl.innerText = `Unique match for this ternary filter. ${m.info}`;
         } else {
-            titleEl.innerText = `Custom Scale (${activeIntervals.length} Notes)`;
-            infoEl.innerText = "This 12-bit vector does not match the standard Western Diatonic modes, standard symmetrical scales, or the 72 Carnatic Melakartas.";
-            titleEl.className = "text-xl lg:text-2xl font-bold text-slate-300";
+            titleEl.innerText = `${matched.length} scales match`;
+            titleEl.className = 'text-xl lg:text-2xl font-bold text-amber-300';
+            const top = matched[0];
+            infoEl.innerText = `Top match: ${top.name}. Toggle more bits to narrow down, or pick one from the list below.`;
         }
     }
 
-    function renderFretboard(activeIntervals) {
+    function renderFretboard(activeIntervals, wildcardIntervals) {
+        wildcardIntervals = wildcardIntervals || [];
         let container = document.getElementById('fretboardContainer');
         let rootNotePitch = parseInt(document.getElementById('rootSelect').value);
         let displayMode = document.getElementById('displaySelect').value;
@@ -1245,17 +2262,45 @@
                 let currentNotePitch = (openPitch + fret) % 12;
                 let intervalFromRoot = (currentNotePitch - rootNotePitch + 12) % 12;
 
-                if (activeIntervals.includes(intervalFromRoot)) {
+                // ─── 3×4 octave-block visualisation (skip the nut) ────────
+                // Major-3rds tuning packs every 12-semitone octave into a
+                // contiguous 3-string × 4-fret rectangle.  Anchor the root
+                // (interval 0) at the bottom-left corner of its block; the
+                // remaining 11 cells fall into a unique (local_x, local_y).
+                if (fret > 0) {
+                    const local_x = intervalFromRoot % 4;
+                    const local_y = Math.floor(intervalFromRoot / 4);
+                    const bottom_string = stringIndex + local_y;
+                    const bottom_fret = fret - local_x;
+                    const stripe_id = bottom_fret + (bottom_string * 4);
+                    const stripe_index = Math.floor(stripe_id / 12);
+                    const is_dark = Math.abs(stripe_index + bottom_string) % 2 === 0;
+                    fretCell.classList.add(is_dark ? 'box-dark' : 'box-light');
+
+                    const shadows = [];
+                    const borderColor = 'rgba(255, 255, 255, 0.15)';
+                    if (local_x === 0) shadows.push(`inset 3px 0 0 ${borderColor}`);
+                    if (local_x === 3) shadows.push(`inset -3px 0 0 ${borderColor}`);
+                    if (local_y === 2) shadows.push(`inset 0 3px 0 ${borderColor}`);
+                    if (local_y === 0) shadows.push(`inset 0 -3px 0 ${borderColor}`);
+                    if (shadows.length) fretCell.style.boxShadow = shadows.join(', ');
+                }
+
+                const isActive   = activeIntervals.includes(intervalFromRoot);
+                const isWildcard = !isActive && wildcardIntervals.includes(intervalFromRoot);
+                if (isActive || isWildcard) {
                     let orb = document.createElement('div');
                     let colorClass = determineHarmonicColor(intervalFromRoot);
-                    orb.className = `note-orb ${colorClass}`;
-                    
+                    orb.className = `note-orb ${colorClass}${isWildcard ? ' is-wildcard' : ''}`;
+                    orb.dataset.interval = intervalFromRoot;   // audition highlight hook
+
                     if (displayMode === 'NOTE') {
                         orb.innerText = CHROMATIC[currentNotePitch];
                     } else {
                         orb.innerText = INTERVAL_NAMES[intervalFromRoot];
                     }
-                    
+                    if (isWildcard) orb.title = `${INTERVAL_NAMES[intervalFromRoot]} · wildcard (filter = 'x')`;
+
                     fretCell.appendChild(orb);
                 }
 
@@ -1278,16 +2323,673 @@
         container.appendChild(numRow);
     }
 
+    // ─── Audition · play the scale, highlight as it sounds ──────────────
+    // Two playback modes, switched by settings.slide:
+    //   - slide=true  → one persistent oscillator that glides between notes
+    //                   via frequency.linearRampToValueAtTime (legato).
+    //   - slide=false → one fresh tone per step with attack/decay (discrete).
+    const auditionState = {
+        isPlaying: false,
+        audioCtx: null,
+        timers: [],
+        activeNodes: null,   // for slide-mode: { osc, gain } to kill on stop
+    };
+
+    const DEFAULT_AUDITION_SETTINGS = {
+        slide: true,
+        tempoMs: 380,
+        direction: 'up',          // 'up' | 'down' | 'updown'
+        instrument: 'synth:pluck' // "<type>:<name>" — type ∈ {synth, wave, sf}
+    };
+    const AUDITION_STORAGE_KEY = 'melagabra:audition:v1';
+    let auditionSettings = { ...DEFAULT_AUDITION_SETTINGS };
+
+    function loadAuditionSettings() {
+        try {
+            const raw = localStorage.getItem(AUDITION_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                auditionSettings = { ...DEFAULT_AUDITION_SETTINGS, ...parsed };
+                // Schema migration: earlier versions stored {waveform: 'triangle'}
+                // as a bare oscillator type. Promote it to the namespaced form.
+                if (parsed.waveform && !parsed.instrument) {
+                    auditionSettings.instrument = 'wave:' + parsed.waveform;
+                }
+            }
+        } catch (_) { /* keep defaults */ }
+    }
+    function saveAuditionSettings() {
+        try { localStorage.setItem(AUDITION_STORAGE_KEY, JSON.stringify(auditionSettings)); }
+        catch (_) { /* localStorage may be blocked; that's fine */ }
+    }
+
+    function midiToFreq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+    function freqToMidi(freq) { return Math.round(69 + 12 * Math.log2(freq / 440)); }
+
+    // ─── Instrument voices ────────────────────────────────────────────
+    // Each is a one-shot: build a fresh audio graph, schedule attack/decay,
+    // stop the source nodes after the natural tail. WebAudio garbage-
+    // collects disconnected nodes once they finish.
+
+    // Raw oscillator with attack/release. Used for the four "Waveforms" options.
+    function playWaveNote(ctx, freq, durationMs, waveform) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = waveform;
+        osc.frequency.value = freq;
+        const now = ctx.currentTime;
+        const dur = durationMs / 1000;
+        const peak = 0.22;
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(peak, now + 0.015);
+        gain.gain.setTargetAtTime(peak * 0.45, now + 0.05, 0.18);
+        gain.gain.linearRampToValueAtTime(0, now + dur);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + dur + 0.03);
+    }
+
+    // Plucked-string approximation — robust across browsers.
+    //   body  : triangle oscillator at `freq` with a fast exponential decay
+    //   click : brief band-pass-filtered noise burst at the attack for the
+    //           "string-contact" character.
+    // (I tried a Karplus-Strong feedback loop first; WebAudio's per-engine
+    // minimum DelayNode time made it unreliable above ~344 Hz.)
+    function playPluckNote(ctx, freq, durationMs) {
+        const now = ctx.currentTime;
+        const dur = durationMs / 1000;
+
+        // Body — triangle wave, sharp attack, exponential decay
+        const body = ctx.createOscillator();
+        body.type = 'triangle';
+        body.frequency.setValueAtTime(freq, now);
+        const bodyGain = ctx.createGain();
+        bodyGain.gain.setValueAtTime(0.0001, now);
+        bodyGain.gain.exponentialRampToValueAtTime(0.34, now + 0.005);
+        bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+        body.connect(bodyGain).connect(ctx.destination);
+        body.start(now);
+        body.stop(now + dur + 0.05);
+
+        // Attack click — 10 ms of filtered noise to suggest the pluck transient
+        const burstLen = Math.max(8, Math.floor(ctx.sampleRate * 0.010));
+        const buf = ctx.createBuffer(1, burstLen, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < burstLen; i++) {
+            d[i] = (Math.random() * 2 - 1) * (1 - i / burstLen) * 0.6;
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const nf = ctx.createBiquadFilter();
+        nf.type = 'bandpass';
+        nf.frequency.value = Math.min(freq * 5, 4000);
+        nf.Q.value = 2;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.20, now);
+        ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+        noise.connect(nf).connect(ng).connect(ctx.destination);
+        noise.start(now);
+    }
+
+    // 2-operator FM bell. Modulator at 3.5× freq (inharmonic) with a fast
+    // exponential decay on the modulation index gives a metallic bell tone.
+    function playBellNote(ctx, freq, durationMs) {
+        const now = ctx.currentTime;
+        const dur = durationMs / 1000;
+        const carrier = ctx.createOscillator();
+        const modulator = ctx.createOscillator();
+        const modGain = ctx.createGain();
+        const out = ctx.createGain();
+        carrier.type = 'sine';
+        modulator.type = 'sine';
+        carrier.frequency.value = freq;
+        modulator.frequency.value = freq * 3.5;
+        modGain.gain.setValueAtTime(freq * 5, now);
+        modGain.gain.exponentialRampToValueAtTime(0.01, now + dur * 0.9);
+        out.gain.setValueAtTime(0, now);
+        out.gain.linearRampToValueAtTime(0.22, now + 0.01);
+        out.gain.exponentialRampToValueAtTime(0.0005, now + dur);
+        modulator.connect(modGain);
+        modGain.connect(carrier.frequency);
+        carrier.connect(out).connect(ctx.destination);
+        modulator.start(now); carrier.start(now);
+        modulator.stop(now + dur + 0.05); carrier.stop(now + dur + 0.05);
+    }
+
+    // Reed: sawtooth into a resonant low-pass with a "vowel sweep" envelope on
+    // the cutoff. Sounds like a soft pipe-organ / harmonium reed.
+    function playReedNote(ctx, freq, durationMs) {
+        const now = ctx.currentTime;
+        const dur = durationMs / 1000;
+        const osc = ctx.createOscillator();
+        const filter = ctx.createBiquadFilter();
+        const out = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        filter.type = 'lowpass';
+        filter.Q.value = 4;
+        filter.frequency.setValueAtTime(freq * 2, now);
+        filter.frequency.linearRampToValueAtTime(freq * 6, now + 0.05);
+        filter.frequency.exponentialRampToValueAtTime(Math.max(freq * 2.2, 200), now + dur);
+        out.gain.setValueAtTime(0, now);
+        out.gain.linearRampToValueAtTime(0.16, now + 0.04);
+        out.gain.setValueAtTime(0.14, now + Math.max(dur * 0.6, 0.05));
+        out.gain.linearRampToValueAtTime(0, now + dur);
+        osc.connect(filter).connect(out).connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + dur + 0.05);
+    }
+
+    // Additive pad: stack 5 sine harmonics with slow attack — flute/choir-ish.
+    function playPadNote(ctx, freq, durationMs) {
+        const now = ctx.currentTime;
+        const dur = durationMs / 1000;
+        const out = ctx.createGain();
+        out.gain.setValueAtTime(0, now);
+        out.gain.linearRampToValueAtTime(0.18, now + Math.max(dur * 0.3, 0.04));
+        out.gain.setValueAtTime(0.18, now + Math.max(dur * 0.7, 0.06));
+        out.gain.linearRampToValueAtTime(0, now + dur);
+        out.connect(ctx.destination);
+        const harmonics = [[1, 1.0], [2, 0.45], [3, 0.28], [4, 0.18], [5, 0.10]];
+        for (const [mult, g] of harmonics) {
+            const osc = ctx.createOscillator();
+            const og = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq * mult;
+            og.gain.value = g * 0.55;
+            osc.connect(og).connect(out);
+            osc.start(now);
+            osc.stop(now + dur + 0.08);
+        }
+    }
+
+    // ─── Soundfont cache · loaded on demand ──────────────────────────────
+    const soundfontCache = new Map();           // name → loaded player
+    const soundfontLoading = new Map();         // name → in-flight Promise
+    function getSoundfontPlayer(name) {
+        if (soundfontCache.has(name)) return Promise.resolve(soundfontCache.get(name));
+        if (soundfontLoading.has(name)) return soundfontLoading.get(name);
+        if (typeof Soundfont === 'undefined' || !auditionState.audioCtx) return Promise.resolve(null);
+        const p = Soundfont.instrument(auditionState.audioCtx, name)
+            .then(player => { soundfontCache.set(name, player); return player; })
+            .catch(err => { console.warn('soundfont load failed:', name, err); return null; })
+            .finally(() => soundfontLoading.delete(name));
+        soundfontLoading.set(name, p);
+        return p;
+    }
+
+    function playInstrumentStep(ctx, freq, durationMs, instrumentSpec) {
+        const idx = instrumentSpec.indexOf(':');
+        const type = instrumentSpec.slice(0, idx);
+        const name = instrumentSpec.slice(idx + 1);
+        try {
+            if (type === 'wave')  return playWaveNote(ctx, freq, durationMs, name);
+            if (type === 'synth') {
+                if (name === 'pluck') return playPluckNote(ctx, freq, durationMs);
+                if (name === 'bell')  return playBellNote(ctx, freq, durationMs);
+                if (name === 'reed')  return playReedNote(ctx, freq, durationMs);
+                if (name === 'pad')   return playPadNote(ctx, freq, durationMs);
+            }
+            if (type === 'sf') {
+                const player = soundfontCache.get(name);
+                if (player) {
+                    player.play(freqToMidi(freq), ctx.currentTime, { duration: durationMs / 1000, gain: 1.4 });
+                    return;
+                }
+            }
+            // Unknown / missing-sample fallback — at least play SOMETHING so
+            // the user gets feedback instead of silent confusion.
+            playWaveNote(ctx, freq, durationMs, 'triangle');
+        } catch (err) {
+            console.warn('audition voice failed; falling back to triangle:', instrumentSpec, err);
+            try { playWaveNote(ctx, freq, durationMs, 'triangle'); } catch (_) {}
+        }
+    }
+
+    function clearAuditionHighlights() {
+        document.querySelectorAll('.bit-badge.is-playing, .legend-swatch.is-playing, .note-orb.is-playing')
+            .forEach(el => el.classList.remove('is-playing'));
+    }
+
+    function highlightInterval(iv) {
+        clearAuditionHighlights();
+        // bit-badge for this interval (there is exactly one per interval)
+        document.querySelectorAll(`#binaryDisplay .bit-badge[data-interval="${iv}"]`)
+            .forEach(el => el.classList.add('is-playing'));
+        // legend swatch(es) covering this interval (some swatches pair, e.g. 3rd+7th)
+        document.querySelectorAll('.legend-swatch').forEach(el => {
+            const ivs = (el.dataset.intervals || '').split(',').map(s => parseInt(s, 10));
+            if (ivs.includes(iv)) el.classList.add('is-playing');
+        });
+        // every fretboard orb that renders this interval
+        document.querySelectorAll(`.note-orb[data-interval="${iv}"]`)
+            .forEach(el => el.classList.add('is-playing'));
+    }
+
+    function stopAudition() {
+        auditionState.timers.forEach(t => clearTimeout(t));
+        auditionState.timers = [];
+        // Tear down slide-mode oscillator if still running
+        if (auditionState.activeNodes) {
+            const { osc, gain } = auditionState.activeNodes;
+            const now = auditionState.audioCtx ? auditionState.audioCtx.currentTime : 0;
+            try {
+                if (gain) {
+                    gain.gain.cancelScheduledValues(now);
+                    gain.gain.setValueAtTime(gain.gain.value, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.05);
+                }
+                if (osc) osc.stop(now + 0.08);
+            } catch (_) { /* node may already be stopped */ }
+            auditionState.activeNodes = null;
+        }
+        auditionState.isPlaying = false;
+        const btn = document.getElementById('auditionBtn');
+        if (btn) {
+            btn.classList.remove('is-playing');
+            btn.querySelector('.audition-icon').textContent = '▶';
+            btn.querySelector('.audition-label').textContent = 'Audition';
+        }
+        clearAuditionHighlights();
+    }
+
+    function buildAuditionSequence(activeIntervals, direction) {
+        const sorted = [...activeIntervals].sort((a, b) => a - b);
+        const ascend = [...sorted, 12];
+        const descend = [12, ...sorted.slice().reverse()];
+        if (direction === 'down')   return descend;
+        if (direction === 'updown') return [...ascend, ...sorted.slice().reverse()];
+        return ascend; // 'up'
+    }
+
+    function setAuditionButtonLabel(icon, label) {
+        const btn = document.getElementById('auditionBtn');
+        if (!btn) return;
+        const i = btn.querySelector('.audition-icon');
+        const l = btn.querySelector('.audition-label');
+        if (i) i.textContent = icon;
+        if (l) l.textContent = label;
+    }
+
+    async function startAudition() {
+        if (auditionState.isPlaying) { stopAudition(); return; }
+
+        const { activeIntervals } = getScaleData();
+        if (!activeIntervals.length) return;
+
+        // Lazy AudioContext — first click is the required user gesture.
+        if (!auditionState.audioCtx) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return;
+            auditionState.audioCtx = new AC();
+        }
+        try { await auditionState.audioCtx.resume(); } catch (_) { /* ignored */ }
+
+        const ctx = auditionState.audioCtx;
+        const rootPc = parseInt(document.getElementById('rootSelect').value, 10) || 0;
+        const sequence = buildAuditionSequence(activeIntervals, auditionSettings.direction);
+        const stepMs = auditionSettings.tempoMs;
+        const instrumentSpec = auditionSettings.instrument || DEFAULT_AUDITION_SETTINGS.instrument;
+        const idx = instrumentSpec.indexOf(':');
+        const instrumentType = instrumentSpec.slice(0, idx);
+        const instrumentName = instrumentSpec.slice(idx + 1);
+
+        // Soundfont pre-load — first use of any sampled instrument hits the
+        // network. Show "Loading…" while we wait so the button isn't a no-op.
+        if (instrumentType === 'sf' && !soundfontCache.has(instrumentName)) {
+            setAuditionButtonLabel('…', 'Loading');
+            const player = await getSoundfontPlayer(instrumentName);
+            if (!player) {
+                // Network failed or library missing. Surface in the label and
+                // bail; user can pick a different instrument.
+                setAuditionButtonLabel('!', 'Unavailable');
+                setTimeout(() => setAuditionButtonLabel('▶', 'Audition'), 1500);
+                return;
+            }
+        }
+
+        auditionState.isPlaying = true;
+        setAuditionButtonLabel('■', 'Stop');
+        document.getElementById('auditionBtn')?.classList.add('is-playing');
+
+        // Slide is only audible for raw waveform oscillators (the persistent-
+        // osc-with-frequency-ramps trick). For synth and sampled instruments
+        // every step retriggers a fresh voice, so slide is ignored there.
+        const useSlideMode = auditionSettings.slide && instrumentType === 'wave';
+
+        if (useSlideMode) {
+            // SLIDE MODE — one persistent osc that holds each pitch flat for the
+            // bulk of the step, then performs a brief portamento (~50 ms) into
+            // the next note right at the step boundary.  This sounds like a
+            // legato instrument articulating distinct notes, not a continuous
+            // pitch-bend smear across the whole scale.
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = instrumentName;     // already validated as a wave: 'triangle' | 'sine' | …
+            const t0 = ctx.currentTime + 0.02;
+            const stepSec = stepMs / 1000;
+            const slideSec = 0.05;          // 50 ms fast glide between notes
+
+            const firstFreq = midiToFreq(60 + rootPc + sequence[0]);
+            osc.frequency.setValueAtTime(firstFreq, t0);
+
+            gain.gain.setValueAtTime(0, t0);
+            gain.gain.linearRampToValueAtTime(0.20, t0 + 0.05);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start(t0);
+
+            // For each subsequent step: anchor the previous frequency just
+            // before the boundary so it stays flat, then quick-ramp to the
+            // new note exactly at the boundary.
+            let prevFreq = firstFreq;
+            for (let i = 1; i < sequence.length; i++) {
+                const stepStart = t0 + i * stepSec;          // when note i begins
+                const slideStart = stepStart - slideSec;     // 50ms before
+                const nextFreq = midiToFreq(60 + rootPc + sequence[i]);
+                osc.frequency.setValueAtTime(prevFreq, slideStart);
+                osc.frequency.linearRampToValueAtTime(nextFreq, stepStart);
+                prevFreq = nextFreq;
+            }
+
+            // Fade out at end
+            const tEnd = t0 + sequence.length * stepSec;
+            gain.gain.setValueAtTime(0.20, tEnd);
+            gain.gain.linearRampToValueAtTime(0, tEnd + 0.10);
+            osc.stop(tEnd + 0.14);
+
+            auditionState.activeNodes = { osc, gain };
+
+            // Visual highlights fire on each step boundary (when the new
+            // note has just settled after the 50 ms glide).
+            sequence.forEach((iv, i) => {
+                auditionState.timers.push(setTimeout(() => {
+                    if (!auditionState.isPlaying) return;
+                    highlightInterval(iv % 12);
+                }, i * stepMs + 20));
+            });
+        } else {
+            // DISCRETE MODE — every step retriggers a fresh voice, dispatched
+            // by instrument type. Synth models and sampled instruments live
+            // here; raw waves with slide disabled also land here.
+            const noteDurMs = Math.max(stepMs - 40, 80);
+            sequence.forEach((iv, i) => {
+                auditionState.timers.push(setTimeout(() => {
+                    if (!auditionState.isPlaying) return;
+                    playInstrumentStep(ctx, midiToFreq(60 + rootPc + iv), noteDurMs, instrumentSpec);
+                    highlightInterval(iv % 12);
+                }, i * stepMs));
+            });
+        }
+
+        // Natural end — give a beat past the last note for tail/release.
+        auditionState.timers.push(setTimeout(stopAudition, sequence.length * stepMs + 220));
+    }
+
+    // ─── Settings popover · open/close + control wiring ─────────────────
+    function syncAuditionSettingsUI() {
+        const slideBtn = document.getElementById('auSlide');
+        if (slideBtn) {
+            slideBtn.dataset.state = auditionSettings.slide ? 'on' : 'off';
+            slideBtn.textContent = auditionSettings.slide ? 'On' : 'Off';
+            slideBtn.setAttribute('aria-pressed', auditionSettings.slide ? 'true' : 'false');
+        }
+        const tempo = document.getElementById('auTempo');
+        const tempoLabel = document.getElementById('auTempoLabel');
+        if (tempo) tempo.value = auditionSettings.tempoMs;
+        if (tempoLabel) tempoLabel.textContent = `${auditionSettings.tempoMs}ms`;
+        document.querySelectorAll('#auditionSettings .seg-btn').forEach(b => {
+            b.classList.toggle('is-active', b.dataset.dir === auditionSettings.direction);
+        });
+        const instr = document.getElementById('auInstrument');
+        if (instr) instr.value = auditionSettings.instrument;
+    }
+
+    function toggleAuditionSettingsPopover(force) {
+        const panel = document.getElementById('auditionSettings');
+        const gear = document.getElementById('auditionSettingsBtn');
+        if (!panel || !gear) return;
+        const willOpen = force === undefined ? panel.classList.contains('hidden') : force;
+        if (willOpen) {
+            panel.classList.remove('hidden');
+            gear.setAttribute('aria-expanded', 'true');
+        } else {
+            panel.classList.add('hidden');
+            gear.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    function wireAuditionSettings() {
+        const slideBtn = document.getElementById('auSlide');
+        slideBtn?.addEventListener('click', () => {
+            auditionSettings.slide = !auditionSettings.slide;
+            saveAuditionSettings();
+            syncAuditionSettingsUI();
+        });
+        const tempo = document.getElementById('auTempo');
+        tempo?.addEventListener('input', (e) => {
+            auditionSettings.tempoMs = parseInt(e.target.value, 10);
+            saveAuditionSettings();
+            syncAuditionSettingsUI();
+        });
+        document.querySelectorAll('#auditionSettings .seg-btn').forEach(b => {
+            b.addEventListener('click', () => {
+                auditionSettings.direction = b.dataset.dir;
+                saveAuditionSettings();
+                syncAuditionSettingsUI();
+            });
+        });
+        const instr = document.getElementById('auInstrument');
+        instr?.addEventListener('change', (e) => {
+            auditionSettings.instrument = e.target.value;
+            saveAuditionSettings();
+            syncAuditionSettingsUI();
+        });
+        document.getElementById('auReset')?.addEventListener('click', () => {
+            auditionSettings = { ...DEFAULT_AUDITION_SETTINGS };
+            saveAuditionSettings();
+            syncAuditionSettingsUI();
+        });
+
+        // Gear toggles popover
+        document.getElementById('auditionSettingsBtn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleAuditionSettingsPopover();
+        });
+        // Click outside the popover closes it (but click inside does not)
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('auditionSettings');
+            if (!panel || panel.classList.contains('hidden')) return;
+            if (panel.contains(e.target)) return;
+            if (e.target.closest('#auditionSettingsBtn')) return;
+            toggleAuditionSettingsPopover(false);
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') toggleAuditionSettingsPopover(false);
+        });
+    }
+
+    // Mark legend swatches as inactive when none of their intervals are
+    // required ('1') or allowed ('x') by the current filter. '0' bits
+    // dim the swatch — they explicitly forbid that interval.
+    // Paired swatches (e.g. Maj3/Maj7) stay lit as long as at least one
+    // of their intervals is present.
+    function updateLegendInactiveStates(activeIntervals, wildcardIntervals) {
+        wildcardIntervals = wildcardIntervals || [];
+        const allowed = new Set([...activeIntervals, ...wildcardIntervals]);
+        document.querySelectorAll('.legend-swatch').forEach(sw => {
+            const ivs = (sw.dataset.intervals || '').split(',').map(s => parseInt(s, 10));
+            const anyAllowed = ivs.some(iv => allowed.has(iv));
+            sw.classList.toggle('is-inactive', !anyAllowed);
+        });
+    }
+
+    // ─── Results list (Matches / Recents / Favorites tabs) ───────────────
+    function setResultsTab(tab) {
+        currentResultsTab = tab;
+        document.querySelectorAll('.results-tab-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.resultsTab === tab);
+        });
+        renderResultsList();
+    }
+
+    function renderResultsList(matchedArg) {
+        const listEl = document.getElementById('resultsList');
+        if (!listEl) return;
+        const matched = matchedArg || computeSearchResults();
+        const dir = document.getElementById('bitDirSelect').value;
+
+        // Tab count badges (always live, regardless of which tab is shown).
+        document.getElementById('tabCountMatches').innerText   = matched.length;
+        document.getElementById('tabCountRecents').innerText   = recentEntries.length;
+        document.getElementById('tabCountFavorites').innerText = favoriteEntries.length;
+
+        // Filter match count line
+        const mc = document.getElementById('filterMatchCount');
+        if (mc) {
+            const n = matched.length;
+            const cls = n === 0 ? ' class="count-zero"' : '';
+            mc.innerHTML = `<strong${cls}>${n}</strong> scale${n === 1 ? '' : 's'} match this filter`;
+        }
+
+        // Save-current-filter button reflects whether the current filter
+        // is already in favorites.
+        const saveBtn = document.getElementById('filterSaveBtn');
+        if (saveBtn) saveBtn.classList.toggle('is-active', isFavorite(filterAsString()));
+
+        listEl.innerHTML = '';
+
+        // Source rows for the active tab
+        let rows;
+        if (currentResultsTab === 'matches') {
+            rows = matched.map(scale => {
+                const fStr = scaleToFilterString(scale, dir);
+                return { filter: fStr, name: scale.name, scale };
+            });
+        } else if (currentResultsTab === 'recents') {
+            rows = recentEntries.slice();
+        } else {
+            rows = favoriteEntries.slice();
+        }
+
+        if (rows.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'result-empty';
+            if (currentResultsTab === 'matches') {
+                empty.innerText = 'No scales match the current filter. Loosen some "0" bits to "x".';
+            } else if (currentResultsTab === 'recents') {
+                empty.innerText = 'No recent selections yet. Pick a match or scale to start a history.';
+            } else {
+                empty.innerText = 'No favorites yet. Click ★ on a match, or use ★ in the toolbar to save the current filter.';
+            }
+            listEl.appendChild(empty);
+            return;
+        }
+
+        const currentSig = filterAsString();
+        rows.forEach(entry => {
+            const row = document.createElement('div');
+            row.className = 'result-row';
+            if (entry.filter === currentSig) row.classList.add('is-selected');
+
+            const name = document.createElement('div');
+            name.className = 'result-name';
+            name.innerText = entry.name;
+
+            const hex = document.createElement('div');
+            hex.className = 'result-hex';
+            hex.innerText = filterToHex(filterFromString(entry.filter));
+
+            const star = document.createElement('button');
+            star.type = 'button';
+            star.className = 'result-star' + (isFavorite(entry.filter) ? ' is-favorite' : '');
+            star.innerText = isFavorite(entry.filter) ? '★' : '☆';
+            star.title = isFavorite(entry.filter) ? 'Remove from favorites' : 'Add to favorites';
+            star.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleFavorite(entry.filter, entry.name);
+                renderResultsList();
+            });
+
+            row.appendChild(name);
+            row.appendChild(hex);
+            row.appendChild(star);
+
+            // Recents get a remove (✕) button so the history is curatable.
+            if (currentResultsTab === 'recents') {
+                const rm = document.createElement('button');
+                rm.type = 'button';
+                rm.className = 'result-remove';
+                rm.innerText = '✕';
+                rm.title = 'Remove from recents';
+                rm.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeRecent(entry.filter);
+                    renderResultsList();
+                });
+                row.appendChild(rm);
+            }
+
+            row.addEventListener('click', () => {
+                if (currentResultsTab === 'matches' && entry.scale) {
+                    setFilterFromScale(entry.scale);
+                } else {
+                    setFilterFromEntry(entry);
+                }
+            });
+
+            listEl.appendChild(row);
+        });
+    }
+
+    // Project a scale's intervals into a 12-char filter signature (no x's)
+    // using the current bit-direction. Used to dedupe matches against
+    // current filter and to record recents.
+    function scaleToFilterString(scale, dir) {
+        const arr = Array(12).fill('0');
+        for (let i = 0; i < 12; i++) {
+            const intervalAssigned = (dir === 'LTR') ? i : (11 - i);
+            if (scale.intervals.includes(intervalAssigned)) arr[i] = '1';
+        }
+        return arr.join('');
+    }
+
     function update() {
-        let { binStr, activeIntervals, dir } = getScaleData();
-        renderIntelligence(activeIntervals, binStr, dir);
-        renderFretboard(activeIntervals);
+        // Any scale/root/tuning change cancels an in-flight audition; the
+        // bit-vector and fretboard are about to be re-rendered, so dangling
+        // .is-playing classes would point at stale DOM.
+        if (auditionState.isPlaying) stopAudition();
+
+        const { activeIntervals, wildcardIntervals } = getScaleData();
+        const matched = computeSearchResults();
+
+        // Sync the hex input to the filter so the badge never lies. Skip
+        // the write while the user is actively typing in the field, so
+        // typing isn't interrupted mid-keystroke by our derived value.
+        const hexInput = document.getElementById('hexInput');
+        if (hexInput && document.activeElement !== hexInput) {
+            hexInput.value = filterToHex();
+        }
+        const hexAmbiguous = currentFilterVector.includes('x');
+        if (hexInput) hexInput.classList.toggle('hex-input-ambiguous', hexAmbiguous);
+
+        renderIntelligence(matched, wildcardIntervals);
+        renderFretboard(activeIntervals, wildcardIntervals);
+        updateLegendInactiveStates(activeIntervals, wildcardIntervals);
+        renderResultsList(matched);
+        updateUndoRedoButtons();
     }
 
     // Boot
     loadTuning();
+    loadAuditionSettings();
+    loadRecents();
+    loadFavorites();
     buildScaleDictionary();
     MELAKARTA_DATA = buildMelakartaData();
+    // Derive initial filter from the hex input's default value (D55) so the
+    // page renders identically to the pre-filter behavior on first load.
+    const _bootHex = document.getElementById('hexInput').value.trim() || 'D55';
+    currentFilterVector = filterFromHex(_bootHex).split('');
     initUI();
     updateTuningSubtitle();
     update();
