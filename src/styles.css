@@ -197,6 +197,100 @@ body { font-feature-settings: "onum" 1, "ss01" 1, "liga" 1; }
 .bit-cell.region-U.on { background: var(--ink); border-color: var(--ink); }
 .bit-cell.region-M.on { background: var(--kumkum); border-color: var(--kumkum); }
 
+/* Harmonic-function "vocabulary" colors shared with guitar.html.
+   When present, these override the region-based colors above
+   (specificity matches; source order wins). */
+.bit-cell.func-root.on  { background: hsl(38, 85%, 38%);  border-color: hsl(38, 85%, 38%); }
+.bit-cell.func-p5.on    { background: hsl(36, 72%, 34%);  border-color: hsl(36, 72%, 34%); }
+.bit-cell.func-maj3.on  { background: hsl(10, 82%, 42%);  border-color: hsl(10, 82%, 42%); }
+.bit-cell.func-min3.on  { background: hsl(2,  72%, 38%);  border-color: hsl(2,  72%, 38%); }
+.bit-cell.func-maj7.on  { background: hsl(350, 65%, 42%); border-color: hsl(350, 65%, 42%); }
+.bit-cell.func-min7.on  { background: hsl(340, 52%, 38%); border-color: hsl(340, 52%, 38%); }
+.bit-cell.func-2.on     { background: hsl(168, 60%, 38%); border-color: hsl(168, 60%, 38%); }
+.bit-cell.func-6.on     { background: hsl(174, 48%, 36%); border-color: hsl(174, 48%, 36%); }
+.bit-cell.func-4.on     { background: hsl(195, 30%, 36%); border-color: hsl(195, 30%, 36%); }
+.bit-cell.func-b2.on    { background: hsl(268, 38%, 42%); border-color: hsl(268, 38%, 42%); }
+.bit-cell.func-b6.on    { background: hsl(273, 32%, 38%); border-color: hsl(273, 32%, 38%); }
+.bit-cell.func-b5.on    { background: hsl(278, 45%, 32%); border-color: hsl(278, 45%, 32%); }
+
+.bit-cell.on.diff { background: var(--kumkum); border-color: var(--kumkum); box-shadow: inset 0 0 0 1px var(--vellum); }
+
+/* ─── Quake-style color-legend drawer ────────────────────────────────
+   A dark slide-down panel that surfaces the harmonic-function legend.
+   Toggled via the "Color legend" link on Plate I or the `l` hotkey. */
+.quake-drawer {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 60;
+  background: rgba(15, 23, 42, 0.96);  /* slate-900 @ 96% */
+  color: #e2e8f0;                       /* slate-200 */
+  border-bottom: 1px solid rgba(200, 162, 74, 0.5);  /* brass thread */
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
+  transform: translateY(-100%);
+  transition: transform 280ms cubic-bezier(0.2, 0, 0, 1);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.quake-drawer.open { transform: translateY(0); }
+.quake-drawer .qd-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 18px;
+  background: rgba(200, 162, 74, 0.08);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.08);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #c8a24a;
+}
+.quake-drawer .qd-close {
+  cursor: pointer;
+  color: #94a3b8;
+  background: none;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-family: inherit; font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.quake-drawer .qd-close:hover { color: #e2e8f0; border-color: rgba(226, 232, 240, 0.6); }
+.quake-drawer .qd-body { padding: 18px 22px; }
+.quake-drawer .qd-prose { color: #cbd5e1; line-height: 1.65; font-family: 'Spectral', serif; font-style: italic; font-size: 13px; max-width: 70ch; }
+.quake-drawer h3 { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; margin-top: 16px; margin-bottom: 8px; color: #94a3b8; }
+.quake-drawer .qd-fam {
+  display: grid; grid-template-columns: 110px 1fr; gap: 8px 16px;
+  align-items: baseline; margin-bottom: 4px;
+}
+.quake-drawer .qd-fam-name { font-weight: 700; }
+.quake-drawer .qd-swatch-row {
+  display: grid; grid-template-columns: repeat(12, minmax(0,1fr));
+  gap: 4px; margin-top: 8px;
+}
+.quake-drawer .qd-swatch {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 6px 2px;
+  border-radius: 3px;
+  text-align: center;
+}
+.quake-drawer .qd-swatch .swara { font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+.quake-drawer .qd-swatch .ivl   { font-size: 9px; color: rgba(255,255,255,0.75); margin-top: 2px; }
+.quake-drawer .qd-swatch .bit   { font-size: 8px; color: rgba(255,255,255,0.55); margin-top: 1px; letter-spacing: 0.08em; }
+
+/* Color legend trigger link on Plate I (and anywhere else we add it). */
+.color-legend-link {
+  cursor: pointer;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  border-bottom: 1px dotted var(--ink-soft);
+  padding-bottom: 1px;
+  transition: color 200ms;
+}
+.color-legend-link:hover { color: var(--kumkum); border-bottom-color: var(--kumkum); }
+
 .mela-tile {
   position: relative;
   background: var(--vellum);
@@ -502,9 +596,6 @@ select.paper-select {
 .fret-cell { stroke: var(--rule); stroke-width: 0.4; fill: transparent; }
 .fret-string { stroke: var(--ink-soft); stroke-width: 0.6; opacity: 0.5; }
 .fret-node { fill: var(--vellum); stroke: var(--ink); stroke-width: 0.6; }
-.fret-node.is-on { fill: var(--ink); }
-.fret-node.is-sa, .fret-node.is-pa { fill: var(--brass); stroke: var(--brass); }
-.fret-node.is-rough { fill: var(--kumkum); stroke: var(--kumkum); }
 
 /* ─── Reduced motion ───────────────────────────────────── */
 

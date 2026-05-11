@@ -46,6 +46,10 @@
 
 <body class="bg-vellum text-ink font-body antialiased">
 
+<!-- Quake-style color-legend drawer · populated by app.js at boot;
+     opens on "Color legend" link click or the `l` hotkey. -->
+<div id="color-legend" class="quake-drawer" role="dialog" aria-label="Color legend" aria-hidden="true"></div>
+
 <!-- Marginal plate index — fades in after the hero hold (4 s) -->
 <aside id="plate-index" class="fixed right-0 top-0 h-full w-12 z-30 flex flex-col items-center justify-center gap-3 text-[11px] tracking-[0.18em] uppercase text-ink-soft opacity-0 pointer-events-none transition-opacity duration-700 select-none" aria-label="Plate index">
   <a href="#/atlas"      data-plate="0"   class="plate-link" title="The Atlas">0</a>

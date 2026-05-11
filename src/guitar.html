@@ -105,6 +105,14 @@
             transform: translate(-50%, -50%) scale(1.2);
         }
 
+        /* ─── Harmonic-function colour vocabulary ───
+           The four families below (Structural / Quality / Extensions / Altered)
+           are shared with the main app's `.bit-cell.func-*` rules in styles.css.
+           HSL values here are intentionally lighter and more saturated than the
+           canonical main-app fills: these render as radial-gradient orbs against
+           a dark slate background, whereas styles.css uses solid colours against
+           the vellum manuscript background. Any change to the vocabulary should
+           be reflected in both files to keep the two surfaces in sync. */
         /* ─── Structural pillars (Brass/Gold family) ─── */
         .color-root { background: radial-gradient(circle at 30% 30%, hsl(42,92%,62%), hsl(38,85%,38%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
         .color-p5   { background: radial-gradient(circle at 30% 30%, hsl(40,78%,52%), hsl(36,72%,34%)); text-shadow: 0 1px 2px rgba(0,0,0,0.8); }

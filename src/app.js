@@ -490,7 +490,7 @@ function buildMelaTile(n, idxInOrbit = 0) {
     const isOn = !!(m.bits & (1 << bit));
     const region = bit === 11 || bit === 4 ? (bit === 11 ? "S" : "P")
                   : (bit >= 7 ? "L" : (bit === 5 || bit === 6 ? "M" : "U"));
-    strip.appendChild(ce("span", { class: `bit-cell ${isOn?"on":""} region-${region}`, title: `bit ${bit}` }));
+    strip.appendChild(ce("span", { class: `bit-cell ${isOn?"on":""} region-${region} func-${BIT_FUNC[bit]}`, title: `bit ${bit} · ${FUNC_FAMILY[BIT_FUNC[bit]]}` }));
   }
   tile.appendChild(strip);
 
@@ -1344,7 +1344,17 @@ function renderEncoding() {
   const grid = ce("div", { class: "grid grid-cols-1 lg:grid-cols-2 gap-10" });
   // Left: bit-vector display
   const left = ce("div");
-  left.appendChild(ce("div", { class: "text-[10px] font-mono uppercase tracking-[0.18em] text-ink-soft mb-3", text: "Twelve-bit vector" }));
+  const bvHeader = ce("div", { class: "flex items-center justify-between mb-3" });
+  bvHeader.appendChild(ce("div", { class: "text-[10px] font-mono uppercase tracking-[0.18em] text-ink-soft", text: "Twelve-bit vector" }));
+  const legendLink = ce("a", {
+    class: "color-legend-link",
+    text: "Color legend ↓",
+    href: "#",
+    title: "Open colour legend (press `l`)",
+    onclick: (e) => { e.preventDefault(); toggleColorLegend(); }
+  });
+  bvHeader.appendChild(legendLink);
+  left.appendChild(bvHeader);
   const bvWrap = ce("div", { id: "encoding-bv", class: "border-l-2 border-ink/15 pl-5 py-2" });
   left.appendChild(bvWrap);
 
@@ -1363,14 +1373,49 @@ function renderEncoding() {
   const aSel = ce("select", { id: "xor-a", class: "paper-select w-full", onchange: () => paintEncoding() });
   const bSel = ce("select", { id: "xor-b", class: "paper-select w-full", onchange: () => paintEncoding() });
   for (let n = 1; n <= 72; n++) {
-    aSel.appendChild(ce("option", { value: n, text: `${String(n).padStart(2,"0")} · ${D.MELA[n].name}` }));
-    bSel.appendChild(ce("option", { value: n, text: `${String(n).padStart(2,"0")} · ${D.MELA[n].name}` }));
+    const label = `${String(n).padStart(2,"0")} · ${D.MELA[n].hex} · ${D.MELA[n].name}`;
+    aSel.appendChild(ce("option", { value: n, text: label }));
+    bSel.appendChild(ce("option", { value: n, text: label }));
   }
   aSel.value = 15;
   bSel.value = 51;
   calc.appendChild(ce("div", { class: "text-[10px] font-mono uppercase text-ink-soft", text: "A" })); calc.appendChild(aSel);
   calc.appendChild(ce("div", { class: "text-[10px] font-mono uppercase text-ink-soft mt-2", text: "B" })); calc.appendChild(bSel);
+
+  // Visualization: bit-positions header + A / B / A⊕B rows
+  const vis = ce("div", { id: "xor-vis", class: "mt-4 space-y-1" });
+  // Static bit-index header row (bit 11 .. 0, left → right)
+  const head = ce("div", { class: "flex items-center gap-3" });
+  head.appendChild(ce("div", { class: "w-8" }));                                          // label gutter
+  head.appendChild(ce("div", { class: "font-mono text-[10px] text-ink-soft w-12" }));     // hex gutter
+  const headCells = ce("div", { class: "grid grid-cols-12 gap-[2px] flex-1" });
+  const swaraLabels = ["S", "R₁", "r/g", "r/g", "G₃", "M₂", "M₁", "P", "N₃", "d/n", "d/n", "D₁"];
+  for (let i = 0; i < 12; i++) {
+    const bit = 11 - i;
+    const cell = ce("div", { class: "text-center font-mono text-[9px] text-ink-soft leading-tight" });
+    cell.appendChild(ce("div", { text: String(bit) }));
+    cell.appendChild(ce("div", { class: "font-body italic", style: "font-size:9px;", text: swaraLabels[i] }));
+    headCells.appendChild(cell);
+  }
+  head.appendChild(headCells);
+  vis.appendChild(head);
+
+  vis.appendChild(ce("div", { id: "xor-a-vis" }));
+  vis.appendChild(ce("div", { id: "xor-b-vis" }));
+  // Operator divider
+  const op = ce("div", { class: "flex items-center gap-3 pt-1" });
+  op.appendChild(ce("div", { class: "w-8 font-mono text-[12px] text-ink-soft text-right", text: "⊕" }));
+  op.appendChild(ce("div", { class: "w-12" }));
+  op.appendChild(ce("div", { class: "flex-1 border-t border-ink/20" }));
+  vis.appendChild(op);
+  vis.appendChild(ce("div", { id: "xor-r-vis" }));
+  calc.appendChild(vis);
+
   calc.appendChild(ce("div", { id: "xor-result", class: "mt-3 font-mono text-[12px]" }));
+  calc.appendChild(ce("div", {
+    class: "font-body italic text-ink-soft text-[12px] leading-relaxed mt-3 pt-3 border-t border-ink/10",
+    html: "The XOR mask <span class='font-mono not-italic'>A ⊕ B</span> has a 1-bit wherever the two melas disagree. Each differing bit is painted in its harmonic-function colour: <strong class='not-italic'>top-heavy</strong> means the swara lives in A and is leaving (↑), <strong class='not-italic'>bottom-heavy</strong> means it is arriving in B (↓) — so a glance at the row tells you the direction of every swara that moves. <strong class='not-italic'>Popcount</strong> counts those 1-bits; the <strong class='not-italic'>Hamming distance</strong> <span class='font-mono not-italic'>d(A, B)</span> is the number of swara positions where A and B differ, and for any two bit-vectors equals the popcount of their XOR. Mela-pairs at <span class='font-mono not-italic'>d = 2</span> are adjacent in the Hamming graph (Plate III); the unique masks <span class='font-mono not-italic'>K₁, K₂, K₃</span> generate the Klein-four orbits."
+  }));
   right.appendChild(calc);
 
   // Six admissible nibble shapes — palette
@@ -1404,20 +1449,22 @@ function paintEncoding() {
   bv.appendChild(ce("div", { class: "font-display italic text-ink-soft", text: m.nameIAST }));
   bv.appendChild(ce("div", { class: "font-mono text-[11px] text-ink-soft mt-1", text: `Mela ${m.n} · chakra ${m.chakra}/12 · position ${m.position}/6` }));
 
-  // Bit grid: 12 cells with region labels
+  // Bit grid: 12 cells with region labels + harmonic-function colour
   const cells = ce("div", { class: "mt-4 grid grid-cols-12 gap-1" });
   for (let bit = 11; bit >= 0; bit--) {
+    const i = 11 - bit;
     const isOn = !!(m.bits & (1 << bit));
-    let region = "U", regLabel = "D-N";
-    if (bit === 11) { region = "S"; regLabel = "Sa"; }
-    else if (bit === 4) { region = "P"; regLabel = "Pa"; }
-    else if (bit >= 7) { region = "L"; regLabel = "R-G"; }
-    else if (bit === 5 || bit === 6) { region = "M"; regLabel = "M"; }
+    let region = "U";
+    if (bit === 11) region = "S";
+    else if (bit === 4) region = "P";
+    else if (bit >= 7) region = "L";
+    else if (bit === 5 || bit === 6) region = "M";
+    const fn = BIT_FUNC[bit];
     const cell = ce("div", { class: "flex flex-col items-center" });
     cell.appendChild(ce("div", {
-      class: `bit-cell region-${region} ${isOn ? "on" : ""}`,
+      class: `bit-cell region-${region} func-${fn} ${isOn ? "on" : ""}`,
       style: "width:18px; height:30px;",
-      title: `bit ${bit}`
+      title: `bit ${bit} · ${SWARA_BY_TRAVERSAL[i]} · ${FUNC_FAMILY[fn]}`
     }));
     cell.appendChild(ce("div", { class: "font-mono text-[9px] text-ink-soft mt-1", text: bit }));
     cells.appendChild(cell);
@@ -1438,16 +1485,229 @@ function paintEncoding() {
   // XOR calculator
   const aN = parseInt(qsel("#xor-a").value, 10);
   const bN = parseInt(qsel("#xor-b").value, 10);
-  const xor = D.MELA[aN].bits ^ D.MELA[bN].bits;
+  const aBits = D.MELA[aN].bits;
+  const bBits = D.MELA[bN].bits;
+  const xor = aBits ^ bBits;
   const pop = D.popcount(xor);
+
+  const aVis = qsel("#xor-a-vis"); if (aVis) { aVis.innerHTML = ""; aVis.appendChild(buildXorRow("A", aBits)); }
+  const bVis = qsel("#xor-b-vis"); if (bVis) { bVis.innerHTML = ""; bVis.appendChild(buildXorRow("B", bBits)); }
+  const rVis = qsel("#xor-r-vis"); if (rVis) { rVis.innerHTML = ""; rVis.appendChild(buildXorDiffRow(aBits, bBits)); }
+
   const r = qsel("#xor-result");
   if (r) {
     let interp = `popcount = ${pop} ⇒ Hamming distance ${pop}`;
-    if (xor === D.K1) interp = "Mask 0x060 — K₁ (madhyama swap).";
-    else if (xor === D.K2) interp = "Mask 0x7EF — K₂ (antipodal complement).";
-    else if (xor === D.K3) interp = "Mask 0x78F — K₃ (full Klein generator).";
-    r.innerHTML = `A ⊕ B = <strong>0x${xor.toString(16).toUpperCase().padStart(3,"0")}</strong><br><span class='text-ink-soft'>${interp}</span>`;
+    if (xor === D.K1) interp += " · Mask 0x060 — K₁ (madhyama swap).";
+    else if (xor === D.K2) interp += " · Mask 0x7EF — K₂ (antipodal complement).";
+    else if (xor === D.K3) interp += " · Mask 0x78F — K₃ (full Klein generator).";
+    else if (xor === 0) interp = "A and B are the same mela.";
+    r.innerHTML = `<span class='text-ink-soft'>${interp}</span>`;
   }
+}
+
+// ─── Quake-style colour-legend drawer ─────────────────────────────────────
+// Built lazily on first toggle and reused. Closed with ESC or the link.
+function ensureColorLegendBuilt() {
+  const drawer = qsel("#color-legend");
+  if (!drawer || drawer.dataset.built === "1") return drawer;
+  drawer.dataset.built = "1";
+
+  const header = ce("div", { class: "qd-header" });
+  header.appendChild(ce("div", { text: "// Color Legend · harmonic-function vocabulary" }));
+  const right = ce("div", { class: "flex items-center gap-3" });
+  right.appendChild(ce("span", { class: "text-[10px] opacity-60", text: "press l or esc to close" }));
+  right.appendChild(ce("button", { class: "qd-close", text: "× close", onclick: closeColorLegend }));
+  header.appendChild(right);
+  drawer.appendChild(header);
+
+  const body = ce("div", { class: "qd-body" });
+  body.appendChild(ce("p", {
+    class: "qd-prose",
+    html: "Bit vectors across the site share the same colour vocabulary as the Guitar Fretboard. The twelve chromatic positions split into four harmonic-function families — pillars, chord-defining thirds and sevenths, expressive extensions, and dissonant alterations. The same hue means the same scale-degree role wherever you see it."
+  }));
+
+  body.appendChild(ce("h3", { text: "Families" }));
+  const fams = [
+    { name: "Structural",  swatch: "root",  members: "1 (Sa · root), 5 (Pa · perfect fifth)" },
+    { name: "Quality",     swatch: "maj3",  members: "♭3 / 3 (minor / major third), ♭7 / 7 (minor / major seventh)" },
+    { name: "Extensions",  swatch: "2",     members: "2 (major second), 4 (perfect fourth · slate-teal), 6 (major sixth)" },
+    { name: "Altered",     swatch: "b5",    members: "♭2 (flat second), ♭5 (tritone), ♭6 (flat sixth)" },
+  ];
+  fams.forEach(f => {
+    const row = ce("div", { class: "qd-fam" });
+    const swatchWrap = ce("div", { class: "flex items-center gap-2" });
+    swatchWrap.appendChild(ce("span", {
+      class: `bit-cell on func-${f.swatch}`,
+      style: "width:14px; height:14px; display:inline-block; border-radius:2px;"
+    }));
+    swatchWrap.appendChild(ce("span", { class: "qd-fam-name", text: f.name }));
+    row.appendChild(swatchWrap);
+    row.appendChild(ce("div", { class: "opacity-80", text: f.members }));
+    body.appendChild(row);
+  });
+
+  body.appendChild(ce("h3", { text: "By bit position" }));
+  const grid = ce("div", { class: "qd-swatch-row" });
+  for (let i = 0; i < 12; i++) {
+    const bit = 11 - i;
+    const fn = BIT_FUNC[bit];
+    const cell = ce("div", {
+      class: `qd-swatch bit-cell on func-${fn}`,
+      title: `${SWARA_BY_TRAVERSAL[i]} · ${FUNC_FAMILY[fn]}`
+    });
+    cell.appendChild(ce("div", { class: "swara", text: SWARA_BY_TRAVERSAL[i] }));
+    cell.appendChild(ce("div", { class: "ivl",   text: IVL_BY_TRAVERSAL[i] }));
+    cell.appendChild(ce("div", { class: "bit",   text: `bit ${bit}` }));
+    grid.appendChild(cell);
+  }
+  body.appendChild(grid);
+
+  body.appendChild(ce("p", {
+    class: "qd-prose mt-4",
+    style: "font-size:11px; opacity:0.7;",
+    html: "On Plate I, the active mela's bit grid and the A ⊕ B calculator use these colours. The A ⊕ B row paints each differing bit as a vertical gradient — colour pooled at the top means the swara is in A and leaves (↑); colour rising from the bottom means it arrives in B (↓)."
+  }));
+
+  drawer.appendChild(body);
+  return drawer;
+}
+function openColorLegend() {
+  const d = ensureColorLegendBuilt();
+  if (!d) return;
+  d.classList.add("open");
+  d.setAttribute("aria-hidden", "false");
+}
+function closeColorLegend() {
+  const d = qsel("#color-legend");
+  if (!d) return;
+  d.classList.remove("open");
+  d.setAttribute("aria-hidden", "true");
+}
+function toggleColorLegend() {
+  const d = qsel("#color-legend");
+  if (d && d.classList.contains("open")) closeColorLegend();
+  else openColorLegend();
+}
+
+// ─── Bit → harmonic-function vocabulary (shared with guitar.html) ─────────
+// Each of the 12 bits is mapped to its chromatic semitone, then to one of
+// four colour families: Structural · Quality · Extensions · Altered.
+// SWARA / IVL_LABEL are indexed by traversal position i = (11 - bit).
+const SWARA_BY_TRAVERSAL = ["S", "R₁", "R₂/G₁", "R₃/G₂", "G₃", "M₂", "M₁", "P", "N₃", "D₃/N₂", "D₂/N₁", "D₁"];
+const IVL_BY_TRAVERSAL   = ["1",  "♭2",  "2",      "♭3",     "3",   "♭5",  "4",  "5", "7",   "♭7",     "6",      "♭6"];
+// BIT_FUNC[bit] = harmonic-function token used in `bit-cell.func-{token}` and `.qd-swatch`.
+const BIT_FUNC = {
+  11: "root", 10: "b2",  9: "2",  8: "min3", 7: "maj3",
+  6: "b5",   5: "4",
+  4: "p5",
+  3: "maj7", 2: "min7", 1: "6",  0: "b6",
+};
+const FUNC_FAMILY = {
+  root: "Structural", p5: "Structural",
+  maj3: "Quality",    min3: "Quality",   maj7: "Quality", min7: "Quality",
+  "2":  "Extensions", "4":  "Extensions", "6": "Extensions",
+  b2: "Altered",      b6: "Altered",     b5: "Altered",
+};
+// CSS colour per bit (mirrors the `.bit-cell.func-*` HSLs in styles.css).
+// Used inline by the A⊕B row to paint directional gradients.
+const BIT_HSL = {
+  11: "hsl(38, 85%, 38%)",   // root
+  10: "hsl(268, 38%, 42%)",  // b2
+   9: "hsl(168, 60%, 38%)",  // 2
+   8: "hsl(2, 72%, 38%)",    // min3
+   7: "hsl(10, 82%, 42%)",   // maj3
+   6: "hsl(278, 45%, 32%)",  // b5
+   5: "hsl(195, 30%, 36%)",  // 4
+   4: "hsl(36, 72%, 34%)",   // p5
+   3: "hsl(350, 65%, 42%)",  // maj7
+   2: "hsl(340, 52%, 38%)",  // min7
+   1: "hsl(174, 48%, 36%)",  // 6
+   0: "hsl(273, 32%, 38%)",  // b6
+};
+
+// Per pitch-class lookups (PITCH_TO_BIT applied to the bit tables above).
+// pc 0..11 = Sa, R₁, R₂/G₁, R₃/G₂, G₃, M₁, M₂, P, D₁, D₂/N₁, D₃/N₂, N₃.
+// Use these in any view that paints a pitch class — instrument surfaces,
+// mela tiles, the on-screen Lightpad preview, etc.
+const PC_FUNC = ["root", "b2", "2", "min3", "maj3", "4", "b5", "p5", "b6", "6", "min7", "maj7"];
+const PC_HSL  = [
+  BIT_HSL[11], BIT_HSL[10], BIT_HSL[9],  BIT_HSL[8], BIT_HSL[7],
+  BIT_HSL[5],  BIT_HSL[6],  BIT_HSL[4],
+  BIT_HSL[0],  BIT_HSL[1],  BIT_HSL[2],  BIT_HSL[3],
+];
+
+// Specialised row for A⊕B: each differing bit becomes a vertical gradient
+// of the bit's harmonic-function colour — solid at the top if the note lives
+// in A only (departing), solid at the bottom if it lives in B only (arriving).
+// Non-differing bits stay empty so the row reads as pure "movement".
+function buildXorDiffRow(aBits, bBits) {
+  const xor = aBits ^ bBits;
+  const wrap = ce("div", { class: "flex items-center gap-3" });
+  wrap.appendChild(ce("div", { class: "font-mono text-[10px] text-ink-soft uppercase tracking-wider w-8 text-right", text: "A⊕B" }));
+  wrap.appendChild(ce("div", { class: "font-mono text-[12px] w-12", text: `0x${xor.toString(16).toUpperCase().padStart(3,"0")}` }));
+  const row = ce("div", { class: "grid grid-cols-12 gap-[2px] flex-1" });
+  for (let i = 0; i < 12; i++) {
+    const bit = 11 - i;
+    const mask = 1 << bit;
+    const aOn = !!(aBits & mask);
+    const bOn = !!(bBits & mask);
+    const diffs = aOn !== bOn;
+    let region = "U";
+    if (bit === 11) region = "S";
+    else if (bit === 4) region = "P";
+    else if (bit >= 7) region = "L";
+    else if (bit === 5 || bit === 6) region = "M";
+    const fn = BIT_FUNC[bit];
+    const hsl = BIT_HSL[bit];
+    let cls = `bit-cell region-${region} func-${fn}`;
+    let style = "width:100%; height:24px;";
+    let title = `bit ${bit} · ${SWARA_BY_TRAVERSAL[i]} · ${FUNC_FAMILY[fn]}`;
+    if (diffs) {
+      cls += " xor-diff";
+      if (aOn) {
+        // In A, gone in B → colour pools at the top, fades down.
+        style += ` background: linear-gradient(to bottom, ${hsl} 0%, ${hsl} 32%, transparent 100%); border-color: ${hsl};`;
+        title += " · in A, removed in B (↑)";
+      } else {
+        // Absent in A, present in B → colour rises from the bottom.
+        style += ` background: linear-gradient(to bottom, transparent 0%, ${hsl} 68%, ${hsl} 100%); border-color: ${hsl};`;
+        title += " · added in B (↓)";
+      }
+    }
+    row.appendChild(ce("div", { class: cls, style: style, title: title }));
+  }
+  wrap.appendChild(row);
+  return wrap;
+}
+
+// Build one row of the XOR visualization: [label]  [hex]  [12 harmonic-function cells].
+// (Used for the A and B rows; the A⊕B row goes through `buildXorDiffRow`.)
+function buildXorRow(label, bits, { diffMask = null } = {}) {
+  const wrap = ce("div", { class: "flex items-center gap-3" });
+  wrap.appendChild(ce("div", { class: "font-mono text-[10px] text-ink-soft uppercase tracking-wider w-8 text-right", text: label }));
+  wrap.appendChild(ce("div", { class: "font-mono text-[12px] w-12", text: `0x${bits.toString(16).toUpperCase().padStart(3,"0")}` }));
+  const row = ce("div", { class: "grid grid-cols-12 gap-[2px] flex-1" });
+  for (let i = 0; i < 12; i++) {
+    const bit = 11 - i;
+    const mask = 1 << bit;
+    const isOn = !!(bits & mask);
+    const isDiff = diffMask !== null && !!(diffMask & mask);
+    let region = "U";
+    if (bit === 11) region = "S";
+    else if (bit === 4) region = "P";
+    else if (bit >= 7) region = "L";
+    else if (bit === 5 || bit === 6) region = "M";
+    let cls = `bit-cell region-${region} func-${BIT_FUNC[bit]}`;
+    if (isOn) cls += " on";
+    if (isDiff) cls += " diff";
+    row.appendChild(ce("div", {
+      class: cls,
+      style: "width:100%; height:24px;",
+      title: `bit ${bit} · ${SWARA_BY_TRAVERSAL[i]} · ${FUNC_FAMILY[BIT_FUNC[bit]]}${isOn ? " · on" : ""}${isDiff ? " · differs" : ""}`
+    }));
+  }
+  wrap.appendChild(row);
+  return wrap;
 }
 
 function renderCross() {
@@ -1852,10 +2112,9 @@ function buildRoliPreview() {
               :  nibble === 1 ? 4 + bitGroup
               :                 11 - bitGroup;
         if (isLit) {
-          fill = "var(--ink)";
-          stroke = "var(--ink)";
-          if (pc === 0 || pc === 7) { fill = "var(--brass)"; stroke = "var(--brass)"; }
-          if (m.roughPCs.includes(pc)) { fill = "var(--kumkum)"; stroke = "var(--kumkum)"; }
+          fill = PC_HSL[pc];
+          stroke = PC_HSL[pc];
+          if (m.roughPCs.includes(pc)) { stroke = "var(--kumkum)"; }
           if (col % 3 === 1) label = D.PITCH_NAMES_SHORT[pc];
         }
       } else if (col === 12) { fill = "var(--indigo)"; stroke = "var(--indigo)"; if (row === 7) label = "K₁"; }
@@ -1991,7 +2250,7 @@ function buildYantra() {
     const lit = !!(m.bits & (1 << D.PITCH_TO_BIT[i]));
     sa.appendChild(ce("rect", {
       x: i * 34, y: 0, width: 28, height: 36,
-      fill: lit ? "var(--brass)" : "transparent", stroke: lit ? "var(--brass)" : "var(--ink-soft)", "stroke-width": 0.6,
+      fill: lit ? PC_HSL[i] : "transparent", stroke: lit ? PC_HSL[i] : "var(--ink-soft)", "stroke-width": 0.6,
       onclick: async () => { (await ensureAudio()).playPC(i); }
     }));
     sa.appendChild(ce("text", { x: i*34 + 14, y: 22, "text-anchor": "middle", class: "yantra-rim-label", style: "font-size:9px;", text: labels[i] }));
@@ -2019,11 +2278,14 @@ function buildFretboard() {
       const pc = midi % 12;
       const lit = !!(m.bits & (1 << D.PITCH_TO_BIT[pc]));
       if (lit) {
-        const isSa = pc === 0, isPa = pc === 7;
         const isRough = m.roughPCs.includes(pc);
+        const style = isRough
+          ? `fill: ${PC_HSL[pc]}; stroke: var(--kumkum); stroke-width: 2;`
+          : `fill: ${PC_HSL[pc]}; stroke: ${PC_HSL[pc]};`;
         svg.appendChild(ce("circle", {
           cx: x + fretW/2, cy: y, r: 8,
-          class: `fret-node ${isSa || isPa ? "is-sa" : ""} ${isRough ? "is-rough" : ""} is-on`,
+          class: "fret-node",
+          style,
           onclick: async () => { (await ensureAudio()).playMidi(midi); }
         }));
         svg.appendChild(ce("text", {
@@ -2050,12 +2312,12 @@ function buildPianoRoll() {
     const pc = midi % 12;
     const isBlack = [1,3,6,8,10].includes(pc);
     const lit = !!(m.bits & (1 << D.PITCH_TO_BIT[pc]));
-    const isSa = pc === 0, isPa = pc === 7;
     const isRough = m.roughPCs.includes(pc);
     svg.appendChild(ce("rect", {
       x: i * kW, y: 0, width: kW - 0.4, height: H * 0.85,
-      fill: lit ? (isSa || isPa ? "var(--brass)" : isRough ? "var(--kumkum)" : "var(--ink)") : (isBlack ? "var(--ink-soft)" : "transparent"),
-      stroke: "var(--ink-soft)", "stroke-width": 0.4,
+      fill: lit ? PC_HSL[pc] : (isBlack ? "var(--ink-soft)" : "transparent"),
+      stroke: lit && isRough ? "var(--kumkum)" : "var(--ink-soft)",
+      "stroke-width": lit && isRough ? 1.5 : 0.4,
       onclick: async () => { (await ensureAudio()).playMidi(midi); }
     }));
     if (lit) {
@@ -2083,11 +2345,14 @@ function buildVinaNeck() {
     const midi = 60 + (24 - f);
     const lit = !!(m.bits & (1 << D.PITCH_TO_BIT[pc]));
     if (lit) {
-      const isSa = pc === 0, isPa = pc === 7;
       const isRough = m.roughPCs.includes(pc);
+      const style = isRough
+        ? `fill: ${PC_HSL[pc]}; stroke: var(--kumkum); stroke-width: 2;`
+        : `fill: ${PC_HSL[pc]}; stroke: ${PC_HSL[pc]};`;
       svg.appendChild(ce("circle", {
         cx: W/2, cy: y, r: 10,
-        class: `fret-node ${isSa || isPa ? "is-sa" : ""} ${isRough ? "is-rough" : ""} is-on`,
+        class: "fret-node",
+        style,
         onclick: async () => { (await ensureAudio()).playMidi(midi); }
       }));
       svg.appendChild(ce("text", {
@@ -2139,7 +2404,12 @@ function boot() {
 
   // Keybindings
   window.addEventListener("keydown", (e) => {
-    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+    // Color-legend drawer takes ESC first when it's open
+    const legend = qsel("#color-legend");
+    const legendOpen = legend && legend.classList.contains("open");
+    if (e.key === "Escape" && legendOpen) { e.preventDefault(); closeColorLegend(); return; }
+    if (e.key === "l" || e.key === "L") { e.preventDefault(); toggleColorLegend(); return; }
     if (e.key === "~" || e.key === "`") { e.preventDefault(); toggleMode(); }
     else if (e.key === "n") { toggleNight(); }
     else if (e.key === "Escape" && state.mode === "perform") { state.mode = "explore"; state.view = "atlas"; }
