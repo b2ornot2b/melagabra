@@ -417,7 +417,8 @@ function renderOrbits() {
     const grid = ce("div", { class: "space-y-8" });
     for (let oid = 1; oid <= 18; oid++) {
       const row = ce("div", { class: "orbit-row", "data-orbit-row": oid });
-      const head = ce("div", { class: "flex items-baseline justify-between border-b border-ink/15 pb-2 mb-3" });
+      const head = ce("div", { class: "border-b border-ink/15 pb-2 mb-3" });
+      const headTop = ce("div", { class: "flex items-baseline justify-between" });
       const left = ce("div");
       left.appendChild(ce("span", { class: "font-mono text-[11px] tracking-[0.18em] uppercase text-ink-soft", text: `Orbit ${String(oid).padStart(2,"0")}` }));
       left.appendChild(ce("span", { class: "ml-3 font-display italic text-ink-soft text-sm", text: `{${D.orbitMembers(oid).join(", ")}}` }));
@@ -425,7 +426,14 @@ function renderOrbits() {
       const ot = D.ORBITS[oid - 1];
       const knownTotal = ot.members.reduce((s, m) => s + (D.MELA[m].janya || 0), 0);
       right.textContent = `janya (known) · ${knownTotal}`;
-      head.append(left, right);
+      headTop.append(left, right);
+      head.appendChild(headTop);
+      // Instantiated orbit identity — concrete arithmetic per row.
+      const [m0, m1, m2, m3] = D.orbitMembers(oid);
+      head.appendChild(ce("div", {
+        class: "font-mono text-[11px] text-ink-soft mt-1",
+        html: `n=${oid} → { <span class='text-ink-2'>${m0}</span> · <span class='text-ink-2'>${m1}</span>=37−${oid} · <span class='text-ink-2'>${m2}</span>=36+${oid} · <span class='text-ink-2'>${m3}</span>=73−${oid} }   <span class='ml-2 text-ink-soft/70'>[ e · K₃ · K₁ · K₂ ]</span>`
+      }));
       row.appendChild(head);
 
       const cells = ce("div", { class: "grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4" });
@@ -436,6 +444,9 @@ function renderOrbits() {
       grid.appendChild(row);
     }
     wrap.appendChild(grid);
+
+    // Primer — Klein four-group exposition (Cayley table + mask bit-vectors)
+    root.appendChild(buildKleinPrimer());
 
     // Header — applied K-buttons that act on the current active mela
     const header = ce("div", { class: "mb-8 flex flex-wrap items-center gap-3" });
@@ -468,11 +479,122 @@ function renderOrbits() {
 }
 renderers.orbits = renderOrbits;
 
+// ─── Klein four-group primer (top of Plate II) ───────────────────────────
+// Shows the V₄ Cayley table + each K-mask as a 12-bit vector coloured by
+// harmonic function, so the reader sees both the algebra and what each
+// transform does to the bits.  Built once, then orphaned in the DOM.
+//
+// Position-to-K mapping used by orbit rows: orbitMembers returns
+// [n, 37−n, 36+n, 73−n], which XOR-maps to [e, K₃, K₁, K₂] from member 0.
+const K_BY_IDX = ["e", "K₃", "K₁", "K₂"];
+
+function buildKleinPrimer() {
+  const wrap = ce("div", { class: "klein-primer" });
+
+  // Title + one-sentence intro
+  wrap.appendChild(ce("div", { class: "klein-primer-title font-mono text-[10px] tracking-[0.2em] uppercase text-ink-soft", text: "Klein four-group V₄" }));
+  wrap.appendChild(ce("p", {
+    class: "klein-primer-prose font-body italic text-ink-soft text-sm leading-relaxed mt-2",
+    html: "Three involutive XOR masks generate a Klein four-group on <span class='font-mono not-italic text-ink-2'>F₂¹²</span>. Every non-identity element is its own inverse and <span class='font-mono not-italic text-ink-2'>K₁ ⊕ K₂ = K₃</span>. Sa and Pa are fixed by all three, the action is free, so the 72 Melakartas split into <strong class='not-italic text-ink'>18 orbits of four</strong>."
+  }));
+
+  // Two-column body: Cayley table | mask bit-vectors
+  const cols = ce("div", { class: "klein-primer-grid mt-4" });
+
+  // ── Column 1 — Cayley table ──
+  const cayleyCol = ce("div", { class: "klein-primer-col" });
+  cayleyCol.appendChild(ce("div", { class: "klein-col-heading font-mono text-[10px] tracking-[0.18em] uppercase text-ink-soft mb-2", text: "Cayley table  ·  XOR" }));
+  const table = ce("table", { class: "cayley-table" });
+  const header = ce("tr");
+  header.appendChild(ce("th", { text: "·" }));
+  ["e","K₁","K₂","K₃"].forEach(h => header.appendChild(ce("th", { text: h })));
+  table.appendChild(header);
+  const rows = [
+    ["e",  "e", "K₁","K₂","K₃"],
+    ["K₁", "K₁","e", "K₃","K₂"],
+    ["K₂", "K₂","K₃","e", "K₁"],
+    ["K₃", "K₃","K₂","K₁","e" ],
+  ];
+  rows.forEach(r => {
+    const tr = ce("tr");
+    tr.appendChild(ce("th", { text: r[0] }));
+    for (let i = 1; i < r.length; i++) {
+      const cell = ce("td", { text: r[i] });
+      if (r[i] === "e") cell.classList.add("is-identity");
+      tr.appendChild(cell);
+    }
+    table.appendChild(tr);
+  });
+  cayleyCol.appendChild(table);
+  cayleyCol.appendChild(ce("div", {
+    class: "font-body italic text-ink-soft text-[11px] mt-2 leading-snug",
+    text: "Diagonal is e — every element squares to identity. Off-diagonal: K₁K₂ = K₃, etc."
+  }));
+  cols.appendChild(cayleyCol);
+
+  // ── Column 2 — Mask bit-vectors ──
+  const masksCol = ce("div", { class: "klein-primer-col" });
+  masksCol.appendChild(ce("div", { class: "klein-col-heading font-mono text-[10px] tracking-[0.18em] uppercase text-ink-soft mb-2", text: "Generators  ·  what each mask flips" }));
+  const maskDefs = [
+    { label: "K₁", bits: 0x060, gloss: "madhyama swap (M₁ ↔ M₂)" },
+    { label: "K₂", bits: 0x7EF, gloss: "antipodal complement — Sa, Pa fixed; the other ten swaras invert" },
+    { label: "K₃", bits: 0x78F, gloss: "K₁ ⊕ K₂ — Sa, Pa, and the madhyama all stay; R-G and D-N invert" },
+  ];
+  maskDefs.forEach(d => {
+    const row = ce("div", { class: "k-mask-row" });
+    row.appendChild(ce("div", { class: "k-mask-label font-mono text-[12px] w-6", text: d.label }));
+    row.appendChild(ce("div", { class: "k-mask-hex font-mono text-[11px] w-12 text-ink-soft", text: `0x${d.bits.toString(16).toUpperCase().padStart(3,"0")}` }));
+    const strip = ce("div", { class: "k-mask-strip" });
+    for (let bit = 11; bit >= 0; bit--) {
+      const flips = !!(d.bits & (1 << bit));
+      let region = "U";
+      if (bit === 11) region = "S";
+      else if (bit === 4) region = "P";
+      else if (bit >= 7) region = "L";
+      else if (bit === 5 || bit === 6) region = "M";
+      const fn = BIT_FUNC[bit];
+      strip.appendChild(ce("span", {
+        class: `bit-cell region-${region} func-${fn} ${flips ? "on" : ""}`,
+        title: `bit ${bit} · ${flips ? "flips" : "fixed"} under ${d.label}`
+      }));
+    }
+    row.appendChild(strip);
+    masksCol.appendChild(row);
+    masksCol.appendChild(ce("div", {
+      class: "font-body italic text-ink-soft text-[11px] mt-1 mb-3 ml-[72px] leading-snug",
+      text: d.gloss
+    }));
+  });
+  cols.appendChild(masksCol);
+
+  wrap.appendChild(cols);
+
+  // Footer — orbit identity formula
+  const ident = ce("div", { class: "klein-primer-identity mt-4 pt-3 border-t border-ink/15 flex flex-wrap items-baseline gap-x-6 gap-y-2" });
+  ident.appendChild(ce("span", { class: "font-mono text-[10px] tracking-[0.18em] uppercase text-ink-soft", text: "Orbit identity" }));
+  ident.appendChild(ce("span", {
+    class: "font-mono text-[12px] text-ink-2",
+    html: "{<em class='not-italic'>n</em>, 37−<em class='not-italic'>n</em>, 36+<em class='not-italic'>n</em>, 73−<em class='not-italic'>n</em>}"
+  }));
+  ident.appendChild(ce("span", { class: "font-body italic text-ink-soft text-[12px]", text: "for n ∈ {1..18}" }));
+  ident.appendChild(ce("span", { class: "font-mono text-[11px] text-ink-soft", text: "→  positions  [ e · K₃ · K₁ · K₂ ]" }));
+  wrap.appendChild(ident);
+
+  return wrap;
+}
+
 function buildMelaTile(n, idxInOrbit = 0) {
   const m = D.MELA[n];
   const tile = ce("div", { class: "mela-tile", "data-mela": n });
   const top = ce("div", { class: "flex items-baseline justify-between" });
-  top.appendChild(ce("span", { class: "mela-num", text: `№ ${String(n).padStart(2,"0")}` }));
+  const numWrap = ce("span", { class: "flex items-baseline gap-2" });
+  numWrap.appendChild(ce("span", { class: "mela-num", text: `№ ${String(n).padStart(2,"0")}` }));
+  numWrap.appendChild(ce("span", {
+    class: `k-badge k-badge-${K_BY_IDX[idxInOrbit].toLowerCase().replace(/[₀₁₂₃]/g, ch => "0123"["₀₁₂₃".indexOf(ch)])}`,
+    title: `Klein-orbit position: ${K_BY_IDX[idxInOrbit]} from row anchor`,
+    text: K_BY_IDX[idxInOrbit]
+  }));
+  top.appendChild(numWrap);
   const tags = ce("span", { class: "text-[10px] font-mono text-ink-soft" });
   if (m.vivadi.extremal) tags.appendChild(ce("span", { class: "badge-vivadi", title: "extremal vivadi" }));
   if (m.forte === "7-Z18" || m.forte === "7-Z38") {

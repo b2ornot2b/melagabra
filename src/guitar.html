@@ -3,7 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Symmetrical M3 Fretboard Visualizer</title>
+    <title>Melagabra Fretboard</title>
+
+    <!-- Favicon + Progressive-Web-App install metadata.
+         icon.svg is the canonical source for the 3-row nibble glyph; PNGs
+         are rasterized from it via /tmp/rasterize-icon.mjs (resvg-js).
+         iOS Safari requires PNG for apple-touch-icon — it ignores SVG and
+         falls back to a page screenshot. The ?v=4 query-strings exist
+         only to bust the iOS home-screen cache after the first attempt
+         that produced a screenshot icon. Bump the version (v=2 → v=3 → …)
+         every time the icon changes; iOS caches apple-touch-icon by URL. -->
+
+    <link rel="icon"             type="image/svg+xml" href="icon.svg?v=4">
+    <link rel="icon"             type="image/png"     sizes="32x32"  href="icon-32.png?v=4">
+    <link rel="apple-touch-icon"                      sizes="180x180" href="icon-180.png?v=4">
+    <link rel="mask-icon"        href="icon.svg?v=4"  color="#C8A24A">
+    <link rel="manifest"         href="manifest.json?v=4">
+    <meta name="theme-color"     content="#0f172a">
+    <meta name="apple-mobile-web-app-capable"          content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title"            content="Melagabra">
+    <meta name="description"     content="Interactive fretboard for 72 Carnatic Melakartas plus Western scales — harmonic-function orbs, custom tunings, Artist's Feel performance hints.">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- soundfont-player · loads General-MIDI samples on demand for the Audition feature.
          Optional: the page works fine if this fails (synth+wave models still play). -->
@@ -202,6 +223,101 @@
         .txt-b6     { color: hsl(275,38%,58%); text-shadow: 0 0 6px hsla(275,32%,52%,0.4); }
         .txt-b5     { color: hsl(280,50%,54%); text-shadow: 0 0 6px hsla(280,45%,48%,0.4); }
         .txt-inactive { color: #64748b; }
+
+        /* ─── Artist's Feel description rendering ──────────────────────
+           Scale descriptions can be shown in two modes:
+             Feel    — evocative one-liner with <note> tags coloured by
+                       interval (using the .txt-* vocabulary above).
+             Theory  — original factual / interval-theory description.
+           Mode is stored in localStorage and reflected on <body data-desc-mode>;
+           the modal renders both spans and CSS hides the inactive one. */
+        .note-tag {
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-weight: 700;
+            padding: 0 1px;
+            letter-spacing: 0.01em;
+        }
+        .scale-info-panel {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 6px;
+            letter-spacing: 0.04em;
+            font-style: italic;
+            line-height: 1.45;
+        }
+        .scale-info-panel::before {
+            content: 'Channel: ';
+            color: #64748b;
+            font-style: normal;
+            text-transform: uppercase;
+            font-size: 9px;
+            letter-spacing: 0.12em;
+            margin-right: 4px;
+        }
+        .desc-mode-toggle {
+            display: inline-flex;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid #334155;
+            border-radius: 6px;
+            overflow: hidden;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .desc-mode-btn {
+            background: none;
+            border: none;
+            color: #64748b;
+            padding: 3px 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.15s, color 0.15s;
+        }
+        .desc-mode-btn:hover { color: #cbd5e1; }
+        .desc-mode-btn.active {
+            background: rgba(20, 184, 166, 0.18);
+            color: hsl(172, 75%, 65%);
+        }
+        /* Mode-driven visibility — both descriptions live in the DOM; CSS
+           hides the inactive one. Avoids re-rendering the modal on toggle. */
+        body[data-desc-mode="feel"]    .desc-factual { display: none; }
+        body[data-desc-mode="factual"] .desc-feel    { display: none; }
+        body[data-desc-mode="factual"] .scale-info-panel { display: none; }
+
+        /* Per-row feel hint — sits next to each nibble's bit buttons,
+           showing the part of the Artist's Feel that pertains to the
+           intervals in that nibble row. Phrases (split by ';') are
+           bucketed by the first <note> tag's row. */
+        .feel-row-hint {
+            flex: 1 1 0%;
+            min-width: 0;
+            font-size: 11px;
+            line-height: 1.45;
+            color: #94a3b8;
+            padding-left: 10px;
+            word-wrap: break-word;
+        }
+        .feel-row-hint:empty { display: none; }
+        body[data-desc-mode="factual"] .feel-row-hint { display: none; }
+
+        /* Clickable virtual-panel artists — open a YouTube search for the
+           artist + scale in a new tab. Dotted underline signals "link." */
+        .panel-artist-link {
+            color: hsl(172, 70%, 68%);
+            text-decoration: none;
+            border-bottom: 1px dotted hsla(172, 55%, 55%, 0.55);
+            font-style: normal;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .panel-artist-link:hover {
+            color: hsl(172, 85%, 80%);
+            border-bottom-color: hsl(172, 75%, 70%);
+        }
+        .panel-sep {
+            color: #475569;
+            margin: 0 6px;
+            font-style: normal;
+        }
 
         .fret-number-row {
             display: flex;
@@ -857,7 +973,7 @@
         <!-- Header & Controls -->
         <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-slate-700 pb-4">
             <div>
-                <h1 class="text-3xl font-bold text-white tracking-tight">Symmetrical Fretboard</h1>
+                <h1 class="text-3xl font-bold text-white tracking-tight">Melagabra Fretboard</h1>
                 <p class="text-slate-400 text-sm mt-1" id="tuningSubtitle">Loading tuning...</p>
             </div>
             
@@ -973,10 +1089,14 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-4 mb-3">
-                        <div class="text-2xl font-bold text-white leading-tight" id="scaleTitle">Loading...</div>
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="text-2xl font-bold text-white leading-tight flex-1 min-w-0" id="scaleTitle">Loading...</div>
+                        <div class="desc-mode-toggle" role="tablist" aria-label="Description style">
+                            <button type="button" class="desc-mode-btn" data-mode="feel" title="Artist's Feel — phrasing, bends, and the panel of masters who own this scale live">Feel</button>
+                            <button type="button" class="desc-mode-btn" data-mode="factual" title="Theory — interval-based factual description">Theory</button>
+                        </div>
                     </div>
-                    <p id="scaleInfo" class="text-slate-300 text-sm leading-relaxed mb-4">...</p>
+                    <div id="scaleInfo" class="text-slate-300 text-sm leading-relaxed mb-4">...</div>
                 </div>
 
                 <div class="flex flex-col gap-2 font-mono text-xs pb-1 mt-auto" id="binaryDisplay">
@@ -1135,6 +1255,7 @@
 
     const KNOWN_TUNINGS = [
         { name: "Major 3rds (FAC#FAC#)", roots: [1, 9, 5, 1, 9, 5] },
+        { name: "Minor 6ths (FC#AFC#A)",  roots: [9, 1, 5, 9, 1, 5] },
         { name: "Standard (EADGBE)",      roots: [4, 11, 7, 2, 9, 4] },
         { name: "Drop D (DADGBE)",        roots: [4, 11, 7, 2, 9, 1] },
         { name: "Double Drop D",          roots: [1, 11, 7, 2, 9, 1] },
@@ -1161,6 +1282,272 @@
     // Scale Dictionary (Will be populated with Western + 72 Melakartas)
     let SCALE_DICT = [];
 
+    // ─── Artist's Feel description plumbing ─────────────────────────
+    // Interval-symbol → CSS class lookup. Keys match the symbols that
+    // appear inside <note>…</note> tags in feel strings; values are the
+    // existing .txt-* classes used by the fretboard orbs and bit display
+    // so the colour vocabulary stays unified across the whole tool.
+    const NOTE_CLASS = {
+        'R': 'txt-root',  '1': 'txt-root',
+        'b2': 'txt-b2',   '2': 'txt-2',
+        'b3': 'txt-min3', '3': 'txt-maj3',
+        '4':  'txt-4',    'b5': 'txt-b5',
+        '5':  'txt-p5',   'b6': 'txt-b6',
+        '6':  'txt-6',    'b7': 'txt-min7',
+        '7':  'txt-maj7'
+    };
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    // Convert a feel string with literal <note>X</note> tags into safe
+    // HTML where each tag becomes a coloured <span>. Everything else is
+    // HTML-escaped, so feel strings can't accidentally inject markup.
+    function renderFeelHTML(text) {
+        if (!text) return '';
+        const safe = String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        return safe.replace(/&lt;note&gt;(.+?)&lt;\/note&gt;/g, (_, inner) => {
+            const sym = inner.trim();
+            const cls = NOTE_CLASS[sym] || 'txt-inactive';
+            return `<span class="note-tag ${cls}">${escapeHtml(sym)}</span>`;
+        });
+    }
+
+    // Which nibble row each interval-symbol belongs to. The 3-row binary
+    // display is laid out top→bot as intervals [0..3], [4..7], [8..11].
+    // We use this to split a feel string's phrases across the three rows.
+    const ROW_OF_NOTE = {
+        'R':  'top', '1':  'top', 'b2': 'top', '2':  'top', 'b3': 'top',
+        '3':  'mid', '4':  'mid', 'b5': 'mid', '5':  'mid',
+        'b6': 'bot', '6':  'bot', 'b7': 'bot', '7':  'bot'
+    };
+
+    // Split a feel string (semicolon-separated evocative phrases) into
+    // three buckets keyed by nibble row. Each phrase is assigned to the
+    // row of its FIRST <note> tag — phrases that span rows still land in
+    // one row to avoid duplication. Phrases with no <note> inherit the
+    // previous phrase's row.
+    function splitFeelByRow(feel) {
+        const buckets = { top: [], mid: [], bot: [] };
+        if (!feel) return buckets;
+        const phrases = String(feel)
+            .split(/;\s*/)
+            .map(s => s.trim())
+            .filter(Boolean);
+        let lastRow = null;
+        for (const phrase of phrases) {
+            const m = phrase.match(/<note>([^<]+)<\/note>/);
+            const sym = m ? m[1].trim() : null;
+            const row = (sym && ROW_OF_NOTE[sym]) || lastRow || 'top';
+            buckets[row].push(phrase);
+            lastRow = row;
+        }
+        return buckets;
+    }
+
+    // Derive a YouTube-search-friendly identifier for a scale name. For
+    // merged "X / Melakarta N: Y" rows we prefer the raga name Y because
+    // it produces sharper YouTube results than "Major" alone.
+    function scaleSearchTerm(scaleName) {
+        if (!scaleName) return '';
+        const melaMatch = scaleName.match(/Melakarta\s+\d+:\s*([^/]+?)(?:\s*$|\s*\/)/);
+        if (melaMatch) return melaMatch[1].trim();
+        // Strip parentheticals and trailing slash-segments.
+        return scaleName
+            .replace(/\s*\([^)]*\)/g, '')
+            .split(/\s*\/\s*/)[0]
+            .trim();
+    }
+
+    // Render the panel attribution as a row of YouTube-search links —
+    // one per artist, opening in a new tab with the search "<artist> <scale>".
+    function buildPanelHTML(panelStr, scaleName) {
+        if (!panelStr) return '';
+        const term  = scaleSearchTerm(scaleName);
+        const names = String(panelStr).split(/\s+·\s+/).map(n => n.trim()).filter(Boolean);
+        return names.map(name => {
+            const q = encodeURIComponent(`${name} ${term}`.trim());
+            const href = `https://www.youtube.com/results?search_query=${q}`;
+            const safeName = escapeHtml(name);
+            const safeTerm = escapeHtml(term);
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="panel-artist-link" title="YouTube: ${safeName} — ${safeTerm}">${safeName}</a>`;
+        }).join('<span class="panel-sep">·</span>');
+    }
+
+    const DESC_MODE_KEY = 'melagabra-desc-mode';
+    function getDescMode() {
+        try { return localStorage.getItem(DESC_MODE_KEY) || 'feel'; }
+        catch (_) { return 'feel'; }
+    }
+    function setDescMode(mode) {
+        if (mode !== 'feel' && mode !== 'factual') return;
+        try { localStorage.setItem(DESC_MODE_KEY, mode); } catch (_) {}
+        document.body.dataset.descMode = mode;
+        document.querySelectorAll('.desc-mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+    }
+
+    // Per-melakarta Artist's Feel + virtual panel. Indexed by mela number
+    // (1..72), keys must match the order of MELAKARTA_NAMES. For the six
+    // melas that collide with a Western scale (8, 20, 22, 28, 29, 65) the
+    // feel is written to fuse Carnatic and Western vocabulary, and the
+    // merge step below overwrites the Western entry's feel/panel.
+    const MELA_DESC = {
+        1:  { feel: "<note>b2</note> and <note>2</note> jammed beside <note>R</note> — vivadi cluster; micro-bend <note>2</note> down toward <note>b2</note>; <note>b6</note> kampita against Sa-drone; <note>6</note> as cold light; silence between phrases.",
+              panel: "T.M. Krishna · S. Balachander · Sanjay Subrahmanyan" },
+        2:  { feel: "<note>b2</note>/<note>2</note> vivadi pinch under <note>R</note>; <note>b7</note> long andolan resolving down to <note>6</note>; oblique slide <note>4</note>→<note>5</note>; ghost the <note>b6</note>; austere pacing.",
+              panel: "M.D. Ramanathan · E. Gayathri · Ranjani-Gayatri" },
+        3:  { feel: "Vivadi <note>b2</note>-<note>2</note> bristle; soaring leading-tone <note>7</note> stalled before <note>R</note>; <note>b6</note> oscillation; release <note>4</note> with a swelled bend; rare-air stillness.",
+              panel: "Bombay Jayashri · Chitti Babu · Mysore Manjunath" },
+        4:  { feel: "<note>b2</note>+<note>2</note> dissonance over <note>R</note>; <note>6</note> kampita reaching for <note>b7</note>; long sustained <note>4</note> as anchor; let <note>5</note> ring untouched; austere, almost ritual.",
+              panel: "T.N. Seshagopalan · Karaikudi Sambasiva Iyer · L. Subramaniam" },
+        5:  { feel: "Vivadi <note>b2</note>-<note>2</note> friction; <note>6</note> bent half-step toward <note>7</note>'s glint; <note>4</note> as cool plateau; choke <note>b2</note>, leave <note>2</note> ringing; reverent silence.",
+              panel: "Aruna Sairam · Rajhesh Vaidhya · Ariyakudi Ramanuja Iyengar" },
+        6:  { feel: "<note>b2</note>/<note>2</note> vivadi bite then leap to <note>b7</note>-<note>7</note> upper cluster; double-stop the two leading tones; slide <note>4</note>→<note>5</note>; brittle, glassy phrasing.",
+              panel: "Semmangudi Srinivasa Iyer · L. Shankar · R.K. Suryanarayana" },
+        7:  { feel: "<note>b2</note> hugging <note>b3</note> — Phrygian shiver; kampita <note>b3</note>, micro-bend <note>b6</note> toward <note>6</note>; ghost <note>6</note>; <note>4</note> as cold floor; weep the <note>b2</note> downward.",
+              panel: "Sanjay Subrahmanyan · T.N. Krishnan · Prasanna" },
+        8:  { feel: "<note>b2</note> over <note>b3</note> — Phrygian-Todi ache; deep gamaka oscillation on <note>b3</note> and <note>b6</note>; pedal-point <note>R</note> drone; <note>b2</note> chromatic slide into <note>R</note>; rake to a held <note>b7</note> with metallic vibrato.",
+              panel: "D.K. Pattammal · Prasanna · Marty Friedman · Allan Holdsworth" },
+        9:  { feel: "<note>b2</note>-<note>b3</note> minor sorrow framed by raised <note>7</note>; bend <note>b3</note> just shy of <note>3</note>; <note>b6</note>-<note>7</note> augmented leap as longing; let <note>R</note> drone bleed through.",
+              panel: "Maharajapuram Santhanam · Mysore Nagaraj · Greg Howe" },
+        10: { feel: "<note>b2</note> grazing <note>b3</note>; <note>6</note> sliding into <note>b7</note> like a sigh; kampita on <note>b3</note>; choke <note>b6</note>'s ghost; pedal <note>4</note> as steady ground.",
+              panel: "K.V. Narayanaswamy · A. Kanyakumari · Mandolin U. Srinivas" },
+        11: { feel: "<note>b2</note>-<note>b3</note> Dorian-with-flat-2 melancholy; raised <note>6</note> warm, <note>7</note> piercing; bend <note>b3</note> upward then collapse; let <note>4</note> hum unaltered.",
+              panel: "Bombay Jayashri · Ganesh-Kumaresh · John McLaughlin" },
+        12: { feel: "<note>b2</note>-<note>b3</note> opens then upper-tetrachord vivadi <note>b7</note>/<note>7</note> cluster; double-stop the leading tones; slide <note>b6</note>→<note>b7</note>→<note>7</note>; haunted, asymmetric.",
+              panel: "T.M. Krishna · S. Balachander · Buckethead" },
+        13: { feel: "<note>b2</note> against <note>3</note> — sharp Bhairavi-glow; <note>b6</note> heavy kampita; <note>6</note> ghosted above; <note>b2</note> slow slide into <note>R</note>; held <note>3</note> with controlled vibrato; expressive silences between calls.",
+              panel: "T.N. Rajarathinam Pillai · L. Subramaniam · Prasanna" },
+        14: { feel: "<note>b2</note>+<note>3</note> Spanish-tinge with <note>b7</note> blues-pull; bend <note>b6</note> a quarter into <note>6</note>; oblique slide <note>4</note>→<note>5</note>; sustain <note>3</note>, then drop to <note>b2</note> sigh.",
+              panel: "Kadri Gopalnath · Debashish Bhattacharya · Ali Akbar Khan" },
+        15: { feel: "<note>b2</note>-against-<note>3</note> raised collar; <note>b6</note> oblique-bend toward <note>7</note>; long-held <note>R</note> drone; kampita <note>3</note> and <note>7</note>; <note>b2</note> behind-the-nut sigh; dawn-light pauses.",
+              panel: "M.S. Subbulakshmi · Lalgudi Jayaraman · Pandit Jasraj · Prasanna" },
+        16: { feel: "<note>b2</note>-<note>3</note> bright Ahir-Bhairav warmth softened by <note>b7</note>; meend <note>b7</note>→<note>6</note>→<note>5</note>; bend <note>b2</note> toward <note>R</note> as devotional bow; hold <note>3</note> with long vibrato.",
+              panel: "Hariprasad Chaurasia · Pandit Vishwa Mohan Bhatt · T.N. Krishnan" },
+        17: { feel: "<note>b2</note> over <note>3</note> sun-bright; <note>6</note>-<note>7</note> rising scale-tail like sunrise; kampita <note>3</note>; micro-bend <note>b2</note>→<note>R</note>; <note>4</note> as still horizon; luminous restraint.",
+              panel: "Semmangudi Srinivasa Iyer · N. Ramani · Rashid Khan" },
+        18: { feel: "<note>b2</note>+<note>3</note> lower beauty crashing into <note>b7</note>/<note>7</note> upper vivadi; double-stop the leading tones; slide <note>b7</note>→<note>7</note>→<note>R</note>; rake-and-choke; precarious, ecstatic.",
+              panel: "T.N. Seshagopalan · Rajhesh Vaidhya · Allan Holdsworth · John McLaughlin" },
+        19: { feel: "<note>b3</note> kampita against the <note>b6</note> drone-ache; slide <note>4</note>→<note>b6</note> over a held <note>5</note>; let <note>6</note> ghost in, never resolve.",
+              panel: "Semmangudi Srinivasa Iyer · Lalgudi Jayaraman · S. Balachander" },
+        20: { feel: "<note>b3</note> sob into <note>4</note> with vocal kampita; <note>b6</note> pre-bent half-step, <note>b7</note> raked then choked; silence on <note>R</note> — Aeolian gravity meets Bhairavi weight.",
+              panel: "M.S. Subbulakshmi · T.N. Krishnan · Carlos Santana · Gary Moore" },
+        21: { feel: "The <note>b6</note>→<note>7</note> augmented-second is the whole raga; oscillate <note>7</note> as a leading-tone kampita, let <note>b3</note> weep beneath.",
+              panel: "Kadri Gopalnath · L. Subramaniam · Yngwie Malmsteen · Al Di Meola" },
+        22: { feel: "<note>6</note> is the secret bloom over the minor frame; bend <note>4</note>→<note>5</note> while <note>b3</note> kampita-sobs; <note>b7</note> rolls home Dorian-cool, Kafi-soulful.",
+              panel: "T.M. Krishna · Prasanna · Carlos Santana · John McLaughlin" },
+        23: { feel: "<note>6</note> and <note>7</note> lift the minor floor skyward; slide <note>b3</note>→<note>4</note> then sustain <note>7</note> as a yearning leading-tone, never landing.",
+              panel: "Sanjay Subrahmanyan · Lalgudi Jayaraman · Allan Holdsworth" },
+        24: { feel: "Twin sevenths ache: <note>b7</note> kampita-rocked, <note>7</note> stabbed clean above; <note>b3</note> sits stoic while <note>4</note>→<note>5</note> swells the line open.",
+              panel: "M.D. Ramanathan · Mysore Manjunath · John Scofield" },
+        25: { feel: "<note>3</note> sweetens, then <note>b6</note> swallows it; micro-bend <note>6</note>↔<note>b6</note> as a single oscillating ache, <note>4</note> the still anchor between.",
+              panel: "Bombay Jayashri · E. Gayathri · Chitti Babu" },
+        26: { feel: "Major bloom then <note>b6</note>→<note>b7</note> grief; bend <note>3</note> with a tear, slide <note>b6</note>→<note>5</note>, let <note>b7</note> sigh into silence.",
+              panel: "Maharajapuram Santhanam · L. Subramaniam · Larry Carlton · Robben Ford" },
+        27: { feel: "<note>3</note> shines but <note>b6</note> shadows it; the <note>b6</note>→<note>7</note> leap is the raga's wound — pre-bend <note>7</note>, hold, release into <note>R</note>.",
+              panel: "T.N. Seshagopalan · A. Kanyakumari · Steve Vai" },
+        28: { feel: "<note>3</note> warm, <note>b7</note> bluesy-loose; oscillate <note>6</note> as Mohanam's pivot, slide <note>b7</note>→<note>R</note> Khamaj-style, <note>4</note> only as passing kampita.",
+              panel: "Ariyakudi Ramanuja Iyengar · N. Ramani · Ravi Shankar · Eric Johnson" },
+        29: { feel: "<note>3</note> and <note>7</note> are pillars, not decoration; bend <note>6</note>→<note>7</note> with vocal vibrato, let <note>4</note> ghost as Bilahari's hidden door.",
+              panel: "M.S. Subbulakshmi · T.R. Mahalingam · Pat Metheny · Andy Timmons" },
+        30: { feel: "Bright <note>3</note> collides with twin sevenths; <note>b7</note> rakes down to <note>6</note>, then <note>7</note> snaps clean — a strident, regal oscillation.",
+              panel: "Aruna Sairam · Rajhesh Vaidhya · Niladri Kumar" },
+        31: { feel: "<note>b3</note>+<note>3</note> rubbed together as one vivadi cluster; micro-bend between them, let <note>b6</note> moan beneath, <note>6</note> brushed only as colour.",
+              panel: "M.D. Ramanathan · S. Balachander · Allan Holdsworth" },
+        32: { feel: "The <note>b3</note>↔<note>3</note> cluster snarls against <note>b7</note>'s mixolydian pull; rake <note>b6</note>→<note>5</note>, hold silence, then <note>3</note> bent flat to vivadi-edge.",
+              panel: "T.N. Seshagopalan · Kadri Gopalnath · John Scofield" },
+        33: { feel: "Brilliant <note>7</note> spears the <note>b3</note>+<note>3</note> wound; pre-bend <note>7</note> a quarter-tone sharp, let <note>b6</note> andolan slowly underneath.",
+              panel: "Ranjani-Gayatri · Mysore Manjunath · Shawn Lane" },
+        34: { feel: "Vivadi <note>b3</note>+<note>3</note> over a Mixolydian floor; oscillate <note>6</note> Khamaj-warm, then choke <note>b7</note>→<note>R</note>, leaving the <note>3</note> raw.",
+              panel: "Sanjay Subrahmanyan · Prasanna · Debashish Bhattacharya" },
+        35: { feel: "<note>b3</note> and <note>3</note> kiss, <note>6</note> blooms, <note>7</note> stabs; slide the cluster as one fat micro-bend, sustain <note>7</note> until it aches.",
+              panel: "Bombay Jayashri · L. Shankar · Shashank Subramanyam" },
+        36: { feel: "Extremal vivadi: <note>b3</note>+<note>3</note> and <note>b7</note>+<note>7</note> as twin clusters; rake all four with kampita fury, <note>4</note> the only still point — strident, blazing, defiant.",
+              panel: "Sheik Chinna Moulana · T.N. Krishnan · Rajhesh Vaidhya · John McLaughlin" },
+        37: { feel: "Crush <note>b2</note> and <note>2</note> as a single oscillating cell against <note>b5</note>; choke <note>b6</note>, ghost <note>b7</note>; silence between phrases is the raga.",
+              panel: "M.D. Ramanathan · S. Balachander · Kadri Gopalnath" },
+        38: { feel: "Andolan the <note>b2</note>/<note>2</note> cluster; pre-bend <note>4</note> up to the aching <note>b5</note>; let <note>b7</note> sag into resolution; sparse, austere.",
+              panel: "T.N. Seshagopalan · Karaikudi Sambasiva Iyer · Allan Holdsworth" },
+        39: { feel: "Vivadi grind — micro-bend <note>b2</note> against the drone; hang on <note>b5</note> as unanswered question; rake <note>7</note> down hard.",
+              panel: "Semmangudi · S. Balachander · Buckethead" },
+        40: { feel: "Slide <note>b2</note> into <note>2</note>; sustain <note>b5</note> over Sa-Pa; let <note>6</note> and <note>b7</note> swell then fade; deeply meditative gamaka.",
+              panel: "M.D. Ramanathan · E. Gayathri · Hariprasad Chaurasia" },
+        41: { feel: "Oscillate the <note>b2</note>-<note>2</note> dyad in long andolan; pre-bend into <note>b5</note>; <note>7</note> kampita as devotional plea; austere, slow.",
+              panel: "T.M. Krishna · Lalgudi Jayaraman · Pandit Jasraj" },
+        42: { feel: "Vivadi extreme — <note>b2</note> and <note>2</note> as braided drone-microtone; choke <note>b5</note>; rake <note>b7</note> to <note>7</note> chromatically; tense and rare.",
+              panel: "Sanjay Subrahmanyan · L. Subramaniam · Marty Friedman" },
+        43: { feel: "Pre-bend <note>b3</note> into <note>b5</note>; kampita the <note>b2</note>; hang on <note>b6</note> with vibrato; ghost-slide <note>b7</note>; brooding, half-lit.",
+              panel: "T.N. Seshagopalan · Mysore Manjunath · John McLaughlin" },
+        44: { feel: "Slow <note>b2</note> andolan into <note>b3</note>; bend <note>4</note>-into-<note>b5</note> as sigh; <note>b6</note> swells then drops to <note>b7</note>; Todi-cousin gravitas.",
+              panel: "Bombay Jayashri · Lalgudi Jayaraman · Pandit Jasraj" },
+        45: { feel: "Kampita <note>b2</note> and <note>b6</note> deeply; pre-bend <note>4</note> up to <note>b5</note> with full gamaka weight; <note>7</note> as devotional ache resolving home.",
+              panel: "M.S. Subbulakshmi · Bhimsen Joshi · Prasanna" },
+        46: { feel: "Slide <note>b3</note> to <note>b5</note> in one breath; oscillate <note>6</note> against <note>b7</note>; <note>b2</note> as ghost-anchor; angular, advanced terrain.",
+              panel: "Ranjani-Gayatri · T.N. Krishnan · U. Srinivas" },
+        47: { feel: "Pre-bend into <note>b5</note> over drone; <note>b3</note> kampita, <note>6</note> held long; resolve <note>7</note> downward with breath-vibrato.",
+              panel: "Sanjay Subrahmanyan · A. Kanyakumari · Shashank Subramanyam" },
+        48: { feel: "<note>b2</note>-<note>b3</note> cell oscillates against <note>b5</note> tension; <note>b7</note> bends into <note>7</note> as Z-pair shimmer; rare, jewelled.",
+              panel: "T.M. Krishna · Rajhesh Vaidhya · Steve Vai" },
+        49: { feel: "Major <note>3</note> over <note>b2</note> drone-grit; bend <note>4</note> to <note>b5</note>; <note>b6</note> chokes, <note>b7</note> ghost-slides; vivadi-flavoured Phrygian-dominant.",
+              panel: "Semmangudi · Karukurichi Arunachalam · Marty Friedman" },
+        50: { feel: "<note>b2</note> to <note>3</note> sweep with kampita; sustain <note>b5</note> as open question; <note>b6</note> swells, <note>b7</note> fades to silence.",
+              panel: "Aruna Sairam · L. Shankar · Niladri Kumar" },
+        51: { feel: "Bend <note>4</note> into <note>b5</note> as the Kamavardhani gait; deep andolan on <note>b2</note> and <note>b6</note>; <note>7</note> kampita reaches home with devotional weight.",
+              panel: "M.S. Subbulakshmi · Vilayat Khan · John McLaughlin" },
+        52: { feel: "Slide <note>3</note> down to <note>b2</note>; pre-bend <note>4</note> into <note>b5</note>; <note>6</note> held against <note>b7</note> creates Lydian-dominant glow over drone.",
+              panel: "Maharajapuram Santhanam · N. Ramani · Debashish Bhattacharya" },
+        53: { feel: "Kampita <note>b2</note> and <note>b5</note>; major <note>3</note> floats, <note>6</note> hangs; resolve <note>7</note> with silence; Marwa-adjacent twilight stillness.",
+              panel: "Kishori Amonkar · Ravi Shankar · Pandit Vishwa Mohan Bhatt" },
+        54: { feel: "<note>3</note> over <note>b2</note> creates Enigmatic shimmer; bend into <note>b5</note>, hold; <note>b7</note>-<note>7</note> chromatic descent rakes the final cadence.",
+              panel: "Sheik Chinna Moulana · Rajhesh Vaidhya · Joe Satriani" },
+        55: { feel: "Lean <note>b3</note> with slow kampita against <note>b5</note>'s tritone scrape; <note>b6</note> drops as bent sigh; <note>6</note> floats then fades to silence.",
+              panel: "M.D. Ramanathan · S. Balachander · Bombay Jayashri" },
+        56: { feel: "Pull <note>b3</note> heavy with andolan, choke <note>b5</note> short, slide <note>b6</note> to <note>b7</note> in a Tamil-cinema cry over Sa-Pa.",
+              panel: "Ilaiyaraaja sessions · Kadri Gopalnath · T.N. Seshagopalan · Prasanna" },
+        57: { feel: "Bend <note>b3</note> trembling, hammer the <note>b5</note>-<note>b6</note> tritone-augmented gap, pre-bend <note>7</note> into Sa like a held breath.",
+              panel: "Sanjay Subrahmanyan · Lalgudi Jayaraman · L. Subramaniam · John McLaughlin" },
+        58: { feel: "Oscillate <note>b3</note> lyrically, swell <note>b5</note> to <note>5</note>, then let <note>6</note> hang over <note>b7</note>'s soft descent — pure plaintive lilt.",
+              panel: "Bombay Jayashri · N. Ramani · Mysore Manjunath · Hariprasad Chaurasia" },
+        59: { feel: "Deep kampita on <note>b3</note>, micro-bend <note>b5</note>, slide <note>6</note> up to <note>7</note> with longing then drop back to <note>5</note>.",
+              panel: "Kishori Amonkar · Rashid Khan · Lalgudi Jayaraman · Niladri Kumar" },
+        60: { feel: "Grind <note>b7</note> against <note>7</note> as the vivadi ache, <note>b5</note> as cold spine, <note>b3</note> in slow andolan — ceremonial, austere.",
+              panel: "M.D. Ramanathan · S. Balachander · T.M. Krishna" },
+        61: { feel: "Ride <note>3</note> bright over <note>b5</note>'s shimmer; <note>b6</note> falls as bent shadow, <note>6</note> ghosts before resolution to <note>5</note>.",
+              panel: "E. Gayathri · T.N. Krishnan · Chitti Babu" },
+        62: { feel: "Sustain <note>3</note>-<note>b5</note> as Lydian sting; bend <note>b6</note> trembling, then rake <note>b7</note> down to <note>5</note> with slack-string sigh.",
+              panel: "Robben Ford · Scott Henderson · L. Shankar · Prasanna" },
+        63: { feel: "Lyric <note>3</note> over <note>b5</note>'s tritone shimmer; bend <note>b6</note> aching against <note>7</note>'s pre-bent leading-tone pull to <note>R</note>.",
+              panel: "Semmangudi · Lalgudi Jayaraman · Allan Holdsworth · U. Srinivas" },
+        64: { feel: "Hold <note>3</note>-<note>b5</note> as Lydian-dominant glow; bend <note>b7</note> bluesy into <note>6</note>, slide back down for the jazz-raga swagger.",
+              panel: "Kadri Gopalnath · Robben Ford · Mike Stern · John McLaughlin" },
+        65: { feel: "Float <note>3</note> on <note>b5</note>'s Lydian shimmer; <note>7</note> pre-bent into <note>R</note> as devotional sigh; <note>6</note> oscillates kampita-bright, sustain, fade.",
+              panel: "M.S. Subbulakshmi · Lalgudi Jayaraman · Jeff Beck · Pat Metheny · Prasanna" },
+        66: { feel: "Bright <note>3</note>-<note>b5</note> arc, then <note>b7</note>+<note>7</note> dissonance bent as twin-leading tension before silence into <note>R</note>.",
+              panel: "T.M. Krishna · Mysore Manjunath · Steve Vai" },
+        67: { feel: "Crush <note>b3</note> and <note>3</note> together with micro-bend vivadi shudder; <note>b5</note> sustains cold; <note>b6</note> drops to <note>6</note> as breath.",
+              panel: "M.D. Ramanathan · S. Balachander · Tigran Hamasyan" },
+        68: { feel: "Slide <note>b3</note> up into <note>3</note> as bent ornament; <note>b5</note> scrapes the drone; <note>b7</note> rakes down hollow to <note>5</note>.",
+              panel: "T.N. Seshagopalan · Karaikudi Sambasiva Iyer · Allan Holdsworth" },
+        69: { feel: "Pre-bend <note>b3</note> into <note>3</note>, hold <note>b5</note> taut, then <note>7</note> as bright pre-bent leading-tone slicing to <note>R</note> — austere, ceremonial.",
+              panel: "Semmangudi · Rajhesh Vaidhya · John Petrucci" },
+        70: { feel: "Vivadi <note>b3</note>-<note>3</note> cluster in tight kampita; <note>b5</note> swells; <note>b7</note> slides down to <note>6</note> then fades over drone.",
+              panel: "M.D. Ramanathan · L. Subramaniam · Wayne Krantz" },
+        71: { feel: "Andolan <note>b3</note>-<note>3</note> as twin ache; <note>b5</note> as spine; <note>6</note> floats up to <note>7</note> pre-bent into <note>R</note> with longing.",
+              panel: "Sanjay Subrahmanyan · Mysore Manjunath · Andy Timmons" },
+        72: { feel: "Ceremonial closer: <note>b3</note>+<note>3</note> vivadi crush, <note>b5</note> tritone drone-press, <note>b7</note>+<note>7</note> twin-leading shudder — sustain, silence, <note>R</note>.",
+              panel: "M.D. Ramanathan · S. Balachander · Frank Zappa · Tigran Hamasyan" }
+    };
+
     const MELAKARTA_NAMES = [
         "Kanakangi", "Ratnangi", "Ganamurti", "Vanaspati", "Manavati", "Tanarupi",
         "Senavati", "Hanumatodi", "Dhenuka", "Natakapriya", "Kokilapriya", "Rupavati",
@@ -1179,31 +1566,81 @@
     function buildScaleDictionary() {
         // Base Western / Common Scales
         const standardScales = [
-            { name: "Major (Ionian)", intervals: [0, 2, 4, 5, 7, 9, 11], info: "The standard Western diatonic major scale. Bright and stable." },
-            { name: "Natural Minor (Aeolian)", intervals: [0, 2, 3, 5, 7, 8, 10], info: "The relative minor of the major scale. Sad or solemn tone." },
-            { name: "Harmonic Minor", intervals: [0, 2, 3, 5, 7, 8, 11], info: "Minor scale with a raised 7th to create a strong pull to the root." },
-            { name: "Melodic Minor (Ascending)", intervals: [0, 2, 3, 5, 7, 9, 11], info: "Minor 3rd but major 6th and 7th. Used heavily in jazz." },
-            { name: "Dorian", intervals: [0, 2, 3, 5, 7, 9, 10], info: "Minor with a major 6th. Popular in blues, jazz, and rock." },
-            { name: "Phrygian", intervals: [0, 1, 3, 5, 7, 8, 10], info: "Minor with a flat 2nd. Has a Spanish or Middle-Eastern flavor." },
-            { name: "Lydian", intervals: [0, 2, 4, 6, 7, 9, 11], info: "Major with a raised 4th. Dreamy, floating, cinematic sound." },
-            { name: "Mixolydian", intervals: [0, 2, 4, 5, 7, 9, 10], info: "Major with a flat 7th. The dominant chord scale, fundamental to Blues." },
-            { name: "Locrian", intervals: [0, 1, 3, 5, 6, 8, 10], info: "The only diatonic mode with a diminished 5th. Very unstable." },
-            { name: "Major Pentatonic", intervals: [0, 2, 4, 7, 9], info: "5-note scale found in folk music globally." },
-            { name: "Minor Pentatonic", intervals: [0, 3, 5, 7, 10], info: "The foundation of rock and blues solos." },
-            { name: "Blues Scale", intervals: [0, 3, 5, 6, 7, 10], info: "Minor pentatonic with the added flat 5 'blue note'." },
-            { name: "Whole Tone", intervals: [0, 2, 4, 6, 8, 10], info: "Symmetrical scale made entirely of whole steps. Dreamy, ambiguous." },
-            { name: "Diminished (H-W)", intervals: [0, 1, 3, 4, 6, 7, 9, 10], info: "Symmetrical half-whole alternating scale." },
-            { name: "Diminished (W-H)", intervals: [0, 2, 3, 5, 6, 8, 9, 11], info: "Symmetrical whole-half alternating scale. Used often over diminished 7th chords." },
-            { name: "Neapolitan Major", intervals: [0, 1, 3, 5, 7, 9, 11], info: "Major scale with a flat 2nd." },
-            { name: "Neapolitan Minor", intervals: [0, 1, 3, 5, 7, 8, 11], info: "Minor scale with a flat 2nd and major 7th." },
-            { name: "Phrygian Dominant", intervals: [0, 1, 4, 5, 7, 8, 10], info: "The 5th mode of Harmonic Minor. Highly exotic, middle-eastern flavor." },
-            { name: "Lydian Dominant", intervals: [0, 2, 4, 6, 7, 9, 10], info: "The 4th mode of Melodic Minor. Excellent for dominant chords with extensions." },
-            { name: "Altered Scale (Super Locrian)", intervals: [0, 1, 3, 4, 6, 8, 10], info: "The 7th mode of Melodic Minor. Contains every altered tension (b9, #9, b5, #5)." },
-            { name: "Hirajoshi", intervals: [0, 2, 3, 7, 8], info: "Traditional Japanese pentatonic scale." },
-            { name: "In Sen", intervals: [0, 1, 5, 7, 10], info: "Traditional Japanese scale, often played on the Koto." },
-            { name: "Prometheus", intervals: [0, 2, 4, 6, 9, 10], info: "Mystic scale invented by Alexander Scriabin." },
-            { name: "Enigmatic", intervals: [0, 1, 4, 6, 8, 10, 11], info: "Unusual scale famously used by Joe Satriani." },
-            { name: "Augmented", intervals: [0, 3, 4, 7, 8, 11], info: "Symmetrical scale of alternating minor thirds and half steps." }
+            { name: "Major (Ionian)", intervals: [0, 2, 4, 5, 7, 9, 11], info: "The standard Western diatonic major scale. Bright and stable.",
+              feel: "Leaning on the <note>3</note> with vocal warmth; <note>4</note>→<note>3</note> as a held sigh; <note>7</note>→<note>R</note> resolution suspended; oblique bends across <note>5</note>.",
+              panel: "Eric Johnson · Andy Timmons · Lindsey Buckingham" },
+            { name: "Natural Minor (Aeolian)", intervals: [0, 2, 3, 5, 7, 8, 10], info: "The relative minor of the major scale. Sad or solemn tone.",
+              feel: "Aching <note>b6</note> drooping into <note>5</note>; <note>b3</note> pre-bend release; <note>b7</note> as smoky exhale; silence between phrases bigger than the notes.",
+              panel: "Carlos Santana · Mark Knopfler · John Frusciante" },
+            { name: "Harmonic Minor", intervals: [0, 2, 3, 5, 7, 8, 11], info: "Minor scale with a raised 7th to create a strong pull to the root.",
+              feel: "Dramatic <note>b6</note>→<note>7</note> leap as the scream; micro-bend the <note>7</note>; <note>b3</note> vibrato wide; rake into <note>R</note> from below.",
+              panel: "Yngwie Malmsteen · Ritchie Blackmore · Marty Friedman" },
+            { name: "Melodic Minor (Ascending)", intervals: [0, 2, 3, 5, 7, 9, 11], info: "Minor 3rd but major 6th and 7th. Used heavily in jazz.",
+              feel: "Hovering <note>b3</note> against bright <note>6</note> and <note>7</note>; legato climb then chromatic swell; <note>3</note> avoided like forbidden fruit.",
+              panel: "Allan Holdsworth · Kurt Rosenwinkel · Mike Stern" },
+            { name: "Dorian", intervals: [0, 2, 3, 5, 7, 9, 10], info: "Minor with a major 6th. Popular in blues, jazz, and rock.",
+              feel: "Singing the major <note>6</note> over a minor <note>b3</note>; slow vibrato on <note>b7</note>; oblique bends <note>4</note>→<note>5</note>; conversational silence.",
+              panel: "Carlos Santana · Trey Anastasio · Pat Martino" },
+            { name: "Phrygian", intervals: [0, 1, 3, 5, 7, 8, 10], info: "Minor with a flat 2nd. Has a Spanish or Middle-Eastern flavor.",
+              feel: "Half-step <note>b2</note>→<note>R</note> as the dagger; choke the <note>b6</note>; microtonal slide into <note>b3</note>; palm-muted drone underneath.",
+              panel: "Paco de Lucía · Al Di Meola · Vicente Amigo" },
+            { name: "Lydian", intervals: [0, 2, 4, 6, 7, 9, 11], info: "Major with a raised 4th. Dreamy, floating, cinematic sound.",
+              feel: "Floating the <note>b5</note> like helium; sustain <note>7</note> against open <note>R</note>; harmonics on <note>3</note>; bend <note>4</note> up a quarter to taste the lift.",
+              panel: "Steve Vai · Joe Satriani · Pat Metheny" },
+            { name: "Mixolydian", intervals: [0, 2, 4, 5, 7, 9, 10], info: "Major with a flat 7th. The dominant chord scale, fundamental to Blues.",
+              feel: "Major <note>3</note> swaggering against bluesy <note>b7</note>; pre-bend <note>b7</note>→<note>R</note>; ghost the <note>4</note>; loose rhythmic drag.",
+              panel: "Duane Allman · Warren Haynes · Derek Trucks" },
+            { name: "Locrian", intervals: [0, 1, 3, 5, 6, 8, 10], info: "The only diatonic mode with a diminished 5th. Very unstable.",
+              feel: "Bleak <note>b5</note> as the gravity well; <note>b2</note> microtonal scrape; ghost <note>b6</note>; dynamics whisper-to-snarl; let the <note>R</note> feel unwelcome.",
+              panel: "Tony Iommi · Stephen Carpenter · Misha Mansoor" },
+            { name: "Major Pentatonic", intervals: [0, 2, 4, 7, 9], info: "5-note scale found in folk music globally.",
+              feel: "Bend <note>2</note>→<note>3</note> with country tear; <note>6</note> sustained as porchlight; oblique pull on <note>5</note>; let the <note>R</note> ring as gospel.",
+              panel: "Albert Lee · Brent Mason · Vince Gill" },
+            { name: "Minor Pentatonic", intervals: [0, 3, 5, 7, 10], info: "The foundation of rock and blues solos.",
+              feel: "Whole-step bend <note>4</note>→<note>5</note>; sting the <note>b3</note> with finger vibrato; rake into <note>b7</note>; silence after the climax phrase.",
+              panel: "Albert King · BB King · Buddy Guy" },
+            { name: "Blues Scale", intervals: [0, 3, 5, 6, 7, 10], info: "Minor pentatonic with the added flat 5 'blue note'.",
+              feel: "Microtonal smear across <note>b5</note>; pre-bend <note>b3</note> a quarter sharp; choke the <note>5</note>; rake-and-release into <note>b7</note>; cry on every bend.",
+              panel: "SRV · Albert Collins · Mike Bloomfield · Hendrix" },
+            { name: "Whole Tone", intervals: [0, 2, 4, 6, 8, 10], info: "Symmetrical scale made entirely of whole steps. Dreamy, ambiguous.",
+              feel: "Levitating on <note>b5</note> and <note>b6</note>; no <note>R</note> gravity; slide whole-step shapes sideways; swell with volume knob; dissolve into harmonics.",
+              panel: "Wayne Shorter · Allan Holdsworth · Ben Monder" },
+            { name: "Diminished (H-W)", intervals: [0, 1, 3, 4, 6, 7, 9, 10], info: "Symmetrical half-whole alternating scale.",
+              feel: "Stab <note>b2</note> over dominant <note>3</note>; symmetrical slides every minor third; choke <note>b5</note>; rapid-fire pull-offs through <note>6</note>.",
+              panel: "John Scofield · Mike Stern · Frank Gambale" },
+            { name: "Diminished (W-H)", intervals: [0, 2, 3, 5, 6, 8, 9, 11], info: "Symmetrical whole-half alternating scale. Used often over diminished 7th chords.",
+              feel: "Hovering <note>b3</note> and natural <note>6</note>; <note>b5</note> as ghost; symmetrical sequencing in thirds; vibrato widest on <note>7</note>; silence between cells.",
+              panel: "Pat Martino · Jimmy Bruno · Jonathan Kreisberg" },
+            { name: "Neapolitan Major", intervals: [0, 1, 3, 5, 7, 9, 11], info: "Major scale with a flat 2nd.",
+              feel: "Exotic <note>b2</note> against bright <note>7</note>; slide <note>b3</note>→<note>3</note> implied; sustain <note>6</note>; let dissonance breathe before resolving to <note>R</note>.",
+              panel: "Ron Jarzombek · Guthrie Govan · Charlie Hunter" },
+            { name: "Neapolitan Minor", intervals: [0, 1, 3, 5, 7, 8, 11], info: "Minor scale with a flat 2nd and major 7th.",
+              feel: "Gypsy <note>b2</note> falling onto <note>R</note>; reach for the dramatic <note>7</note> over <note>b6</note>; tremolo-pick the climb; choke into silence.",
+              panel: "Django Reinhardt · Stochelo Rosenberg · Biréli Lagrène" },
+            { name: "Phrygian Dominant", intervals: [0, 1, 4, 5, 7, 8, 10], info: "The 5th mode of Harmonic Minor. Highly exotic, middle-eastern flavor.",
+              feel: "The <note>b2</note>→<note>3</note> Spanish lurch; microtonal hammer on <note>b6</note>; slide between <note>3</note> and <note>4</note>; rasgueado-like rake then absolute stillness.",
+              panel: "Paco de Lucía · Al Di Meola · Marty Friedman · Rusty Cooley" },
+            { name: "Lydian Dominant", intervals: [0, 2, 4, 6, 7, 9, 10], info: "The 4th mode of Melodic Minor. Excellent for dominant chords with extensions.",
+              feel: "Sparkling <note>b5</note> over earthy <note>b7</note>; bend <note>4</note>→<note>b5</note> as the smirk; sustain <note>3</note>; oblique against open <note>R</note>; loose-pocket phrasing.",
+              panel: "Scott Henderson · Robben Ford · Mike Stern" },
+            { name: "Altered Scale (Super Locrian)", intervals: [0, 1, 3, 4, 6, 8, 10], info: "The 7th mode of Melodic Minor. Contains every altered tension (b9, #9, b5, #5).",
+              feel: "Every colour tense — bend <note>b3</note>, slide <note>b5</note>, hammer <note>b6</note>; resolve outward to the next chord; silence is the punctuation, not the rest.",
+              panel: "Kurt Rosenwinkel · Adam Rogers · Wayne Krantz" },
+            { name: "Hirajoshi", intervals: [0, 2, 3, 7, 8], info: "Traditional Japanese pentatonic scale.",
+              feel: "Koto-like <note>b2</note> against ringing <note>5</note>; behind-the-nut bend <note>b6</note>; sustain <note>b3</note> with thumb-vibrato; vast silence between four-note cells.",
+              panel: "Marty Friedman · Hotei · Munetaka Higuchi" },
+            { name: "In Sen", intervals: [0, 1, 5, 7, 10], info: "Traditional Japanese scale, often played on the Koto.",
+              feel: "Stark <note>b2</note> over hollow <note>4</note>; bend <note>b7</note> a quarter; pluck-and-let-decay like shakuhachi breath; harmonics on <note>5</note>; ma between every note.",
+              panel: "Masayoshi Takanaka · Kazumi Watanabe · Bill Frisell" },
+            { name: "Prometheus", intervals: [0, 2, 4, 6, 9, 10], info: "Mystic scale invented by Alexander Scriabin.",
+              feel: "Mystic <note>b5</note> floating above natural <note>6</note>; no <note>5</note> safety net; whole-tone slides interrupted by <note>b7</note>; volume-swell each phrase into vapour.",
+              panel: "Allan Holdsworth · Ben Monder · Tim Miller" },
+            { name: "Enigmatic", intervals: [0, 1, 4, 6, 8, 10, 11], info: "Unusual scale famously used by Joe Satriani.",
+              feel: "<note>b2</note> shadow, <note>b5</note> mirage, <note>7</note> as the impossible peak; chromatic creep then symmetrical leaps; harmonic squeals on <note>3</note>; dramatic silence.",
+              panel: "Joe Satriani · Steve Vai · Buckethead" },
+            { name: "Augmented", intervals: [0, 3, 4, 7, 8, 11], info: "Symmetrical scale of alternating minor thirds and half steps.",
+              feel: "Symmetrical <note>b3</note>/<note>3</note> ambiguity; sustain <note>b6</note> against <note>7</note>; minor-third leaps; volume swells into the <note>5</note>; let the <note>R</note> shimmer ungrounded.",
+              panel: "John Abercrombie · Ben Monder · Jonathan Kreisberg" }
         ];
 
         SCALE_DICT = [...standardScales];
@@ -1220,15 +1657,25 @@
                     
                     // Check if it matches an existing Western scale
                     let existing = SCALE_DICT.find(s => JSON.stringify(s.intervals) === JSON.stringify(intervals));
-                    
+                    const melaNum = melaIndex + 1;
+                    const desc = MELA_DESC[melaNum];
+
                     if (existing) {
-                        existing.name = `${existing.name} / Melakarta ${melaIndex + 1}: ${MELAKARTA_NAMES[melaIndex]}`;
+                        existing.name = `${existing.name} / Melakarta ${melaNum}: ${MELAKARTA_NAMES[melaIndex]}`;
                         existing.info += ` Also part of the Carnatic Melakarta system.`;
+                        // Overwrite feel/panel with the Carnatic fusion description —
+                        // the agent wrote a feel that bridges both identities.
+                        if (desc) {
+                            existing.feel = desc.feel;
+                            existing.panel = desc.panel;
+                        }
                     } else {
                         SCALE_DICT.push({
-                            name: `Melakarta ${melaIndex + 1}: ${MELAKARTA_NAMES[melaIndex]}`,
+                            name: `Melakarta ${melaNum}: ${MELAKARTA_NAMES[melaIndex]}`,
                             intervals: intervals,
-                            info: `Carnatic parent scale (Raga). Generated systematically via the Purvanga/Uttaranga tetrachord mathematical matrix.`
+                            info: `Carnatic parent scale (Raga). Generated systematically via the Purvanga/Uttaranga tetrachord mathematical matrix.`,
+                            feel: desc ? desc.feel : '',
+                            panel: desc ? desc.panel : ''
                         });
                     }
                     melaIndex++;
@@ -1847,6 +2294,11 @@
                 row.className = 'scale-row';
                 row.dataset.name = s.name.toLowerCase();
                 row.dataset.hex = hex.toLowerCase();
+                // Description column: both feel and factual variants live in
+                // the DOM; the [data-desc-mode] CSS toggle decides which is
+                // visible. Falls back to factual if feel is missing.
+                const _feelHTML    = s.feel ? renderFeelHTML(s.feel) : escapeHtml(s.info || '');
+                const _factualHTML = escapeHtml(s.info || '');
                 row.innerHTML = `
                     <div class="flex items-center gap-1.5 shrink-0">
                         <span class="nibble-badge nb-brass">${hex[0]}</span>
@@ -1854,8 +2306,11 @@
                         <span class="nibble-badge nb-teal">${hex[2]}</span>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <div class="text-white font-medium text-sm truncate">${s.name}</div>
-                        <div class="text-slate-400 text-xs truncate">${s.info}</div>
+                        <div class="text-white font-medium text-sm truncate">${escapeHtml(s.name)}</div>
+                        <div class="text-slate-400 text-xs truncate">
+                            <span class="desc-feel">${_feelHTML}</span>
+                            <span class="desc-factual">${_factualHTML}</span>
+                        </div>
                     </div>
                 `;
                 row.addEventListener('click', () => selectScale(hex));
@@ -1915,6 +2370,14 @@
 
     // UI Initialization
     function initUI() {
+        // Description-mode toggle (Feel ↔ Theory). Mode is reflected on
+        // <body data-desc-mode> so the dual-span DOM in #scaleInfo and the
+        // scale-chooser modal can be CSS-toggled without re-render.
+        setDescMode(getDescMode());
+        document.querySelectorAll('.desc-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => setDescMode(btn.dataset.mode));
+        });
+
         const rootSelect = document.getElementById('rootSelect');
         CHROMATIC.forEach((note, index) => {
             let opt = document.createElement('option');
@@ -2064,11 +2527,21 @@
 
         // 3 nibble rows, physical bit order fixed (top=11..8, mid=7..4, bot=3..0).
         // filterIdx for physical bit `bitIdx` is (11 - bitIdx).
+        // `key` is the bucket name used by splitFeelByRow so we can attach
+        // the row's portion of the Artist's Feel next to its bit buttons.
         const rows = [
-            { bits: [11, 10, 9, 8], hexClass: 'hex-top', bitPrefix: 'bit-top', label: 'Sa–R₁–R₂–R₃' },
-            { bits: [7,  6,  5,  4], hexClass: 'hex-mid', bitPrefix: 'bit-mid', label: 'G₃–M₁–M₂–Pa' },
-            { bits: [3,  2,  1,  0], hexClass: 'hex-bot', bitPrefix: 'bit-bot', label: 'N₃–D₃–D₂–D₁' }
+            { key: 'top', bits: [11, 10, 9, 8], hexClass: 'hex-top', bitPrefix: 'bit-top', label: 'Sa–R₁–R₂–R₃' },
+            { key: 'mid', bits: [7,  6,  5,  4], hexClass: 'hex-mid', bitPrefix: 'bit-mid', label: 'G₃–M₁–M₂–Pa' },
+            { key: 'bot', bits: [3,  2,  1,  0], hexClass: 'hex-bot', bitPrefix: 'bit-bot', label: 'N₃–D₃–D₂–D₁' }
         ];
+
+        // When a single scale is locked in and it has a feel string, split
+        // the feel's phrases by row so each .bin-row gets only the hint that
+        // pertains to its own intervals. Otherwise no per-row hints.
+        const hasWildcardForFeel = currentFilterVector.includes('x');
+        const feelSplit = (matched.length === 1 && matched[0].feel)
+            ? splitFeelByRow(matched[0].feel)
+            : null;
 
         const txtForInterval = (iv) => {
             switch (iv) {
@@ -2166,6 +2639,18 @@
                 rowEl.appendChild(btn);
             });
 
+            // Per-row Artist's Feel hint — only when a single scale is locked
+            // in. CSS hides this in theory mode.
+            const hint = document.createElement('div');
+            hint.className = 'feel-row-hint';
+            if (feelSplit) {
+                const phrases = feelSplit[row.key] || [];
+                if (phrases.length) {
+                    hint.innerHTML = renderFeelHTML(phrases.join('; '));
+                }
+            }
+            rowEl.appendChild(hint);
+
             binEl.appendChild(rowEl);
         });
 
@@ -2174,31 +2659,61 @@
         const onesCount = currentFilterVector.filter(b => b === '1').length;
         const zerosCount = currentFilterVector.filter(b => b === '0').length;
 
+        // writeScaleInfo emits both feel and factual variants so the mode
+        // toggle can switch instantly. In feel mode the actual feel text is
+        // split across the .bin-row hints above; #scaleInfo's feel slot is
+        // empty for single-match (only the panel subtitle shows) and falls
+        // back to the status text for no-match / multi-match cases. The
+        // panel attribution is YouTube-linkified by buildPanelHTML.
+        const writeScaleInfo = (parts) => {
+            const factualText = (parts.factualPrefix || '') + (parts.factualText || '');
+            const factualHTML = `<span class="desc-factual">${escapeHtml(factualText)}</span>`;
+            const hasScaleFeel = !!(parts.panelText && parts.feelText);
+            const feelInner = hasScaleFeel
+                ? '' // feel lives in the bit-row hints; don't duplicate
+                : escapeHtml(factualText); // status text fallback for feel mode
+            const feelHTML  = `<span class="desc-feel">${feelInner}</span>`;
+            const panelHTML = parts.panelText
+                ? `<div class="scale-info-panel">${buildPanelHTML(parts.panelText, parts.scaleName || '')}</div>`
+                : '';
+            infoEl.innerHTML = `${feelHTML}${factualHTML}${panelHTML}`;
+        };
+
         if (matched.length === 0) {
             titleEl.innerText = (onesCount === 0 && zerosCount === 0)
                 ? 'Wildcard filter'
                 : 'No scales match';
             titleEl.className = 'text-xl lg:text-2xl font-bold text-slate-400';
-            if (onesCount === 0 && zerosCount === 0) {
-                infoEl.innerText = 'Every bit is a wildcard. Toggle bits to "1" to require a note, "0" to forbid one. Click any matching scale below to load it.';
-            } else {
-                infoEl.innerText = 'No scale in the dictionary satisfies this filter. Relax some "0"s to wildcards or pick a recent / favorite below.';
-            }
+            const noMatchText = (onesCount === 0 && zerosCount === 0)
+                ? 'Every bit is a wildcard. Toggle bits to "1" to require a note, "0" to forbid one. Click any matching scale below to load it.'
+                : 'No scale in the dictionary satisfies this filter. Relax some "0"s to wildcards or pick a recent / favorite below.';
+            writeScaleInfo({ feelText: null, factualText: noMatchText });
         } else if (matched.length === 1 && !hasWildcard) {
             const m = matched[0];
             titleEl.innerText = m.name;
             titleEl.className = 'text-xl lg:text-2xl font-bold text-cyan-400';
-            infoEl.innerText = m.info;
+            writeScaleInfo({ feelText: m.feel, factualText: m.info, panelText: m.panel, scaleName: m.name });
         } else if (matched.length === 1) {
             const m = matched[0];
             titleEl.innerText = m.name;
             titleEl.className = 'text-xl lg:text-2xl font-bold text-cyan-400';
-            infoEl.innerText = `Unique match for this ternary filter. ${m.info}`;
+            writeScaleInfo({
+                feelText: m.feel,
+                factualText: m.info,
+                factualPrefix: 'Unique match for this ternary filter. ',
+                panelText: m.panel,
+                scaleName: m.name
+            });
         } else {
             titleEl.innerText = `${matched.length} scales match`;
             titleEl.className = 'text-xl lg:text-2xl font-bold text-amber-300';
             const top = matched[0];
-            infoEl.innerText = `Top match: ${top.name}. Toggle more bits to narrow down, or pick one from the list below.`;
+            writeScaleInfo({
+                feelText: top.feel,
+                factualText: `Top match: ${top.name}. Toggle more bits to narrow down, or pick one from the list below.`,
+                panelText: top.panel,
+                scaleName: top.name
+            });
         }
     }
 

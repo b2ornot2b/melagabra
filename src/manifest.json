@@ -1,0 +1,31 @@
+{
+    "name": "Melagabra Fretboard",
+    "short_name": "Melagabra",
+    "description": "Interactive fretboard for 72 Carnatic Melakartas plus Western scales — harmonic-function orbs, customizable tunings, and Artist's Feel performance hints.",
+    "start_url": "./guitar.html",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#0f172a",
+    "theme_color": "#0f172a",
+    "icons": [
+        {
+            "src": "icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        },
+        {
+            "src": "icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}

@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Melagabra Fretboard">
+    <!--
+      Melagabra Fretboard icon — a 3-row nibble glyph echoing the app's
+      signature bit display. Twelve orbs in a 3×4 grid map the 12 chromatic
+      pitch classes; the LIT pattern is hex D55 — the app's default
+      baseline filter (intervals R · b2 · b3 · 4 · 5 · 6 · 7):
+
+        Top row (bits 11..8 → intervals 0,1,2,3): D = 1101  →  ● ● · ●
+        Mid row (bits  7..4 → intervals 4,5,6,7): 5 = 0101  →  · ● · ●
+        Bot row (bits  3..0 → intervals 8..11):   5 = 0101  →  · ● · ●
+
+      CRITICAL: each orb is coloured by its INTERVAL's harmonic-function
+      family (matching the .color-* / .txt-* legend used by the fretboard
+      orbs and bit-display text) — NOT by its nibble row. The four families:
+
+        Structural  (Brass/Gold):    R, 5
+        Chord Quality (Vermillion):  3, b3, 7, b7
+        Extensions  (Teal):          2, 6, 4
+        Altered     (Mauve/Plum):    b2, b6, b5
+
+      Gradient ids therefore use the interval name (g-root, g-b2, g-min3,
+      g-4, g-p5, g-6, g-maj7) and their HSL stops mirror the matching
+      .color-* radial-gradient definitions in guitar.html so the icon
+      reads as a literal miniature of the fretboard surface.
+    -->
+    <defs>
+        <!-- Structural (Brass/Gold) ── R (color-root) -->
+        <radialGradient id="g-root" cx="30%" cy="30%" r="80%">
+            <stop offset="0%"   stop-color="hsl(42, 95%, 76%)"/>
+            <stop offset="60%"  stop-color="hsl(40, 88%, 56%)"/>
+            <stop offset="100%" stop-color="hsl(36, 82%, 32%)"/>
+        </radialGradient>
+        <!-- Structural ── 5 (color-p5), slightly deeper amber than R -->
+        <radialGradient id="g-p5" cx="30%" cy="30%" r="80%">
+            <stop offset="0%"   stop-color="hsl(40, 86%, 68%)"/>
+            <stop offset="60%"  stop-color="hsl(38, 78%, 48%)"/>
+            <stop offset="100%" stop-color="hsl(34, 72%, 28%)"/>
+        </radialGradient>
+
+        <!-- Chord Quality (Vermillion) ── b3 (color-min3), deep red -->
+        <radialGradient id="g-min3" cx="30%" cy="30%" r="80%">
+            <stop offset="0%"   stop-color="hsl(6, 90%, 72%)"/>
+            <stop offset="60%"  stop-color="hsl(4, 80%, 50%)"/>
+            <stop offset="100%" stop-color="hsl(2, 72%, 30%)"/>
+        </radialGradient>
+        <!-- Chord Quality ── 7 (color-maj7), vermillion shading toward pink -->
+        <radialGradient id="g-maj7" cx="30%" cy="30%" r="80%">
+            <stop offset="0%"   stop-color="hsl(355, 90%, 76%)"/>
+            <stop offset="60%"  stop-color="hsl(352, 75%, 56%)"/>
+            <stop offset="100%" stop-color="hsl(350, 65%, 34%)"/>
+        </radialGradient>
+
+        <!-- Extensions (Teal) ── 6 (color-6) -->
+        <radialGradient id="g-6" cx="30%" cy="30%" r="80%">
+            <stop offset="0%"   stop-color="hsl(178, 72%, 68%)"/>
+            <stop offset="60%"  stop-color="hsl(176, 56%, 46%)"/>
+            <stop offset="100%" stop-color="hsl(174, 48%, 28%)"/>
+        </radialGradient>
+        <!-- Extensions ── 4 (color-4), most-grayed slate-teal (suspended sus4 ambiguity) -->
+        <radialGradient id="g-4" cx="30%" cy="30%" r="80%">
+            <stop offset="0%"   stop-color="hsl(190, 48%, 68%)"/>
+            <stop offset="60%"  stop-color="hsl(190, 38%, 46%)"/>
+            <stop offset="100%" stop-color="hsl(195, 32%, 28%)"/>
+        </radialGradient>
+
+        <!-- Altered (Mauve/Plum) ── b2 (color-b2) -->
+        <radialGradient id="g-b2" cx="30%" cy="30%" r="80%">
+            <stop offset="0%"   stop-color="hsl(270, 62%, 78%)"/>
+            <stop offset="60%"  stop-color="hsl(268, 50%, 58%)"/>
+            <stop offset="100%" stop-color="hsl(268, 42%, 36%)"/>
+        </radialGradient>
+
+        <!-- Slate background gradient -->
+        <radialGradient id="bg" cx="30%" cy="20%" r="100%">
+            <stop offset="0%"   stop-color="#1e293b"/>
+            <stop offset="100%" stop-color="#0b1220"/>
+        </radialGradient>
+    </defs>
+
+    <!-- Rounded slate background -->
+    <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+    <!-- Subtle inner ridge -->
+    <rect x="0.5" y="0.5" width="63" height="63" rx="13.5"
+          fill="none" stroke="rgba(148,163,184,0.10)" stroke-width="1"/>
+
+    <!-- Row 0 — Top nibble (D = 1101) → intervals R, b2, _, b3 -->
+    <circle cx="14" cy="18" r="5.2" fill="url(#g-root)"/>  <!-- R   (brass)      -->
+    <circle cx="26" cy="18" r="5.2" fill="url(#g-b2)"/>    <!-- b2  (mauve)      -->
+    <circle cx="38" cy="18" r="3"   fill="none" stroke="rgba(148,163,184,0.32)" stroke-width="1"/>
+    <circle cx="50" cy="18" r="5.2" fill="url(#g-min3)"/>  <!-- b3  (vermillion) -->
+
+    <!-- Row 1 — Mid nibble (5 = 0101) → intervals _, 4, _, 5 -->
+    <circle cx="14" cy="32" r="3"   fill="none" stroke="rgba(148,163,184,0.32)" stroke-width="1"/>
+    <circle cx="26" cy="32" r="5.2" fill="url(#g-4)"/>     <!-- 4   (teal-slate) -->
+    <circle cx="38" cy="32" r="3"   fill="none" stroke="rgba(148,163,184,0.32)" stroke-width="1"/>
+    <circle cx="50" cy="32" r="5.2" fill="url(#g-p5)"/>    <!-- 5   (brass-deep) -->
+
+    <!-- Row 2 — Bot nibble (5 = 0101) → intervals _, 6, _, 7 -->
+    <circle cx="14" cy="46" r="3"   fill="none" stroke="rgba(148,163,184,0.32)" stroke-width="1"/>
+    <circle cx="26" cy="46" r="5.2" fill="url(#g-6)"/>     <!-- 6   (teal)       -->
+    <circle cx="38" cy="46" r="3"   fill="none" stroke="rgba(148,163,184,0.32)" stroke-width="1"/>
+    <circle cx="50" cy="46" r="5.2" fill="url(#g-maj7)"/>  <!-- 7   (pink-verm)  -->
+
+    <!-- Tiny glint on the R (root) orb — the Sa anchor that grounds
+         the whole scale, echoing the structural-brass family. -->
+    <circle cx="12" cy="16" r="1.2" fill="rgba(255,255,255,0.55)"/>
+</svg>
