@@ -1,6 +1,6 @@
 # Guitar Fretboard Visualizer
 
-Lessons from building `src/guitar.html`, the standalone dark-theme fretboard.
+Lessons from building `docs/guitar.html`, the standalone dark-theme fretboard.
 
 ## Dark theme as intentional divergence
 

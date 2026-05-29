@@ -1,5 +1,5 @@
 // roli-tests.mjs — pure-Node tests for sysex.js and the RoliBlock state
-// machine.  Run with: node src/hardware/roli-tests.mjs
+// machine.  Run with: node docs/hardware/roli-tests.mjs
 
 import * as S from "./sysex.js";
 

@@ -7,14 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `melagabra` pairs a research paper with its interactive companion:
 
 - `paper` — manuscript on the algebraic structure of the 72 Carnatic Melakarta parent scales (Klein four-group action, Hamming-distance-2 graph, Gray-code Hamiltonian, Z-related Forte classes, vivadi nibble predicate). It is the authoritative spec for the math.
-- `src/` — single-page interactive companion ("Melagabra"). Static deployment, no build step, no backend.
+- `docs/` — single-page interactive companion ("Melagabra"). Static deployment, no build step, no backend. Served via GitHub Pages from `/docs`.
 
 The paper defines the math; the site must stay consistent with it. When the math and the code disagree, the paper wins — update the code.
 
 ## File layout
 
 ```
-src/
+docs/
   index.html                 shell, plate scaffolding, Google Fonts + Tailwind/Phosphor CDN
   app.js                     state Proxy, hash router, view dispatcher, all plate
                              renderers, instrument surfaces, audio + MIDI gate
@@ -36,16 +36,16 @@ src/
 
 ## Running
 
-No build step.  Serve `src/` with any static server:
+No build step.  Serve `docs/` with any static server:
 
 ```bash
-node /tmp/static-server.js src 8765   # or python3 -m http.server -d src 8765
+node /tmp/static-server.js docs 8765   # or python3 -m http.server -d docs 8765
 open http://localhost:8765
 ```
 
 ## Encoding convention (load-bearing)
 
-Everything in `src/` and the paper assumes the **mirrored-endianness 12-bit layout** (paper §2.3). Do not "fix" it to a more obvious LSB-at-root scheme — the Klein-four group only closes as XOR under this convention.
+Everything in `docs/` and the paper assumes the **mirrored-endianness 12-bit layout** (paper §2.3). Do not "fix" it to a more obvious LSB-at-root scheme — the Klein-four group only closes as XOR under this convention.
 
 Bit assignment (`PITCH_TO_BIT` in `data.js`, semitone → bit index):
 
@@ -64,7 +64,7 @@ ADMISSIBLE_NIBBLES_RG = [0xC, 0xA, 0x9, 0x6, 0x5, 0x3]   // (R₁G₁), (R₁G�
 ADMISSIBLE_NIBBLES_DN = [0x3, 0x5, 0x9, 0x6, 0xA, 0xC]   // 4-bit reversal of the row above
 ```
 
-The DN array is the bit-reversal of the RG array, because the two tetrachords scan opposite directions across the chromatic semitones. The earlier version of `src/index.html` used the same array for both regions and produced wrong bits for D-N indices 1, 2, 5, 6 — including mela 29 (Western major scale). Verify against the paper's Table 1 (mela 8 → 0xD35; 15 → 0xCB9; 21 → 0xB39; 29 → 0xABA; 51 → 0xCD9; 57 → 0xB59; 65 → 0xADA).
+The DN array is the bit-reversal of the RG array, because the two tetrachords scan opposite directions across the chromatic semitones. The earlier version of `docs/index.html` used the same array for both regions and produced wrong bits for D-N indices 1, 2, 5, 6 — including mela 29 (Western major scale). Verify against the paper's Table 1 (mela 8 → 0xD35; 15 → 0xCB9; 21 → 0xB39; 29 → 0xABA; 51 → 0xCD9; 57 → 0xB59; 65 → 0xADA).
 
 ## Klein-four masks
 
@@ -178,7 +178,7 @@ The Console (Plate ∞) supports a fifth instrument: a physical ROLI Lightpad Bl
 
 ### Wire protocol
 
-All custom messages use SysEx envelope `F0 7D 4D <cmd> <payload…> F7` (manufacturer ID `0x7D` = MMA-reserved non-commercial; sub-ID `0x4D` = ASCII `'M'`). Pure encoder/decoder lives in `src/hardware/sysex.js` with 114 round-trip + boundary tests in `roli-tests.mjs`.
+All custom messages use SysEx envelope `F0 7D 4D <cmd> <payload…> F7` (manufacturer ID `0x7D` = MMA-reserved non-commercial; sub-ID `0x4D` = ASCII `'M'`). Pure encoder/decoder lives in `docs/hardware/sysex.js` with 114 round-trip + boundary tests in `roli-tests.mjs`.
 
 ```
 cmd  payload                                            direction
@@ -236,10 +236,10 @@ If slot 3 ≠ magic, defaults to mela 15 (Mayamalavagowla, 0xCB9). Writes are ra
 
 ```bash
 # Pure-Node sysex unit tests
-node src/hardware/roli-tests.mjs              # expect 114 passed, 0 failed
+node docs/hardware/roli-tests.mjs              # expect 114 passed, 0 failed
 
 # JSDOM smoke (now includes Roli option + 15×15 preview surface)
-/tmp/node_modules/.bin/esbuild src/app.js --bundle --format=iife --outfile=/tmp/app.bundle.js
+/tmp/node_modules/.bin/esbuild docs/app.js --bundle --format=iife --outfile=/tmp/app.bundle.js
 node /tmp/jsdom-bundle-smoke.mjs              # expect 28/28
 ```
 
@@ -255,9 +255,9 @@ Real-hardware tests require a Lightpad Block + Roli BLOCKS Studio (or compatible
 
 ```bash
 # 1. Self-test in pure Node
-node --input-type=module -e "import('./src/data.js').then(d => { const r = d.selfTest(); console.log(r.ok ? 'PASS' : 'FAIL'); if (!r.ok) for (const f of r.failures) console.log(' -', f); });"
+node --input-type=module -e "import('./docs/data.js').then(d => { const r = d.selfTest(); console.log(r.ok ? 'PASS' : 'FAIL'); if (!r.ok) for (const f of r.failures) console.log(' -', f); });"
 
 # 2. Bundle + JSDOM smoke (validates DOM rendering of all 11 plates)
-/tmp/node_modules/.bin/esbuild src/app.js --bundle --format=iife --outfile=/tmp/app.bundle.js
+/tmp/node_modules/.bin/esbuild docs/app.js --bundle --format=iife --outfile=/tmp/app.bundle.js
 node /tmp/jsdom-bundle-smoke.mjs   # 24-check suite
 ```
